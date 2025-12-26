@@ -15,3 +15,9 @@ langdetect
 deep-translator
 yt-dlp
 ffmpeg-python
+telethon
+python-dotenv
+yt-dlp
+certifi
+aiohttp
+edge-tts
