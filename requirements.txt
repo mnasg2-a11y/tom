@@ -1,3 +1,15 @@
 telethon
 python-dotenv
 python-dotenv
+telethon
+python-dotenv
+aiohttp
+yt-dlp
+edge-tts
+Pillow
+psutil
+speedtest-cli
+pytz
+beautifulsoup4
+langdetect
+deep-translator
