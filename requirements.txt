@@ -13,3 +13,5 @@ pytz
 beautifulsoup4
 langdetect
 deep-translator
+yt-dlp
+ffmpeg-python
