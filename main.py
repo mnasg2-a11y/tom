@@ -1,5 +1,6 @@
 # main.py
 import os, sys, asyncio, importlib, time
+import socks  # إضافة مكتبة البروكسي
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
@@ -7,7 +8,20 @@ from dotenv import load_dotenv
 # الإعدادات الأساسية
 API_ID = 22439859 
 API_HASH = '312858aa733a7bfacf54eede0c275db4'
-SESSION_FILE = "session.txt"  # ملف نصي بسيط بدلاً من .env
+SESSION_FILE = "session1.txt" 
+
+# --- 🌐 إعدادات البروكسي (Proxy Settings) ---
+# قم بتعديل البيانات أدناه لتناسب البروكسي الخاص بك
+USE_PROXY = True  # اجعلها False لتعطيل البروكسي
+PROX_ADDR = '127.0.0.1' # عنوان البروكسي (IP)
+PROX_PORT = 1080        # المنفذ (Port)
+PROX_USER = None        # اسم المستخدم (إن وجد)
+PROX_PASS = None        # كلمة المرور (إن وجد)
+
+if USE_PROXY:
+    proxy = (socks.SOCKS5, PROX_ADDR, PROX_PORT, True, PROX_USER, PROX_PASS)
+else:
+    proxy = None
 
 # 1. تحميل الجلسة من ملف نصي
 def load_session():
@@ -30,12 +44,20 @@ def save_session(session_str):
 SESSION_STR = load_session()
 
 if not SESSION_STR:
-    print("🛠 إنشاء جلسة جديدة...")
+    print("🛠 إنشاء جلسة جديدة عبر البروكسي...")
     print("⚠️ ستحتاج إلى إدخال الرقم مرة واحدة فقط")
     print("=" * 50)
     
     async def create_session():
-        client_temp = TelegramClient(StringSession(), API_ID, API_HASH)
+        # إضافة البروكسي وبارامترات الثبات للجلسة الجديدة
+        client_temp = TelegramClient(
+            StringSession(), 
+            API_ID, 
+            API_HASH, 
+            proxy=proxy,
+            connection_retries=10, 
+            timeout=30
+        )
         await client_temp.start()
         session_str = client_temp.session.save()
         save_session(session_str)
@@ -46,8 +68,15 @@ if not SESSION_STR:
     print("✅ تم حفظ الجلسة بنجاح!")
     print("=" * 50)
 
-# إنشاء العميل باستخدام الجلسة المحفوظة
-client = TelegramClient(StringSession(SESSION_STR), API_ID, API_HASH)
+# إنشاء العميل الأساسي مع البروكسي وإعدادات منع الـ Timeout
+client = TelegramClient(
+    StringSession(SESSION_STR), 
+    API_ID, 
+    API_HASH, 
+    proxy=proxy,
+    connection_retries=10, 
+    timeout=30
+)
 
 PLUGINS_HELP = {}
 
@@ -57,7 +86,6 @@ def load_plugins():
     if not os.path.exists("plugins"): 
         os.makedirs("plugins")
     
-    # ملف بسيط للإضافات الأساسية
     if not os.listdir("plugins"):
         create_basic_plugins()
     
@@ -108,108 +136,63 @@ async def myinfo_handler(event):
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.الاوامر'))
 async def help_menu(event):
-    """عرض قائمة الأوامر"""
     menu = "🚀 **سـورس كـومـن Pro - الأوامر**\n"
     menu += "═" * 30 + "\n"
-    
     if not PLUGINS_HELP:
         menu += "📭 لا توجد أوامر مثبتة حالياً\n"
     else:
         for sec, cmds in PLUGINS_HELP.items():
             menu += f"\n**{sec}:**\n{cmds}\n"
-    
     menu += f"\n⏱ **الوقت:** {time.strftime('%H:%M:%S')}"
     menu += f"\n📁 **عدد الإضافات:** {len(PLUGINS_HELP)}"
-    
     await event.edit(menu)
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.تحديث'))
 async def update_cmd(event):
-    """تحديث الأوامر دون إعادة تشغيل"""
     try:
         old_count = len(PLUGINS_HELP)
         load_plugins()
         new_count = len(PLUGINS_HELP)
-        
         await event.edit(f"**✅ تم التحديث بنجاح!**\n"
-                        f"**الإضافات:** {old_count} → {new_count}\n"
-                        f"**الوقت:** {time.strftime('%H:%M:%S')}")
+                        f"**الإضافات:** {old_count} → {new_count}\n")
     except Exception as e:
         await event.edit(f"**❌ خطأ في التحديث:**\n`{str(e)[:100]}`")
 
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.اعادة تشغيل'))
-async def restart_cmd(event):
-    """إعادة تشغيل البوت (نظرياً)"""
-    await event.edit("**🔄 جاري إعادة التشغيل...**")
-    load_plugins()
-    await event.edit("**✅ تم إعادة التشغيل بنجاح!**")
-
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.الحالة'))
 async def status_cmd(event):
-    """عرض حالة البوت"""
     user = await client.get_me()
-    uptime = time.strftime("%H:%M:%S")
-    
     status_msg = (
         f"**📊 حالة البوت:**\n"
         f"**👤 المستخدم:** {user.first_name}\n"
         f"**🆔 الايدي:** `{user.id}`\n"
         f"**📁 الإضافات:** {len(PLUGINS_HELP)}\n"
-        f"**⏱ الوقت:** {uptime}\n"
-        f"**🔒 الجلسة:** {'✅ محفوظة' if SESSION_STR else '❌ غير موجودة'}"
+        f"**🔒 البروكسي:** {'✅ متصل' if USE_PROXY else '❌ معطل'}"
     )
     await event.edit(status_msg)
 
 async def start_bot():
-    """بدء تشغيل البوت"""
     try:
-        # اختبار اتصال الجلسة
         await client.connect()
-        
         if not await client.is_user_authorized():
-            print("❌ الجلسة غير صالحة، جاري إنشاء جلسة جديدة...")
-            os.remove(SESSION_FILE) if os.path.exists(SESSION_FILE) else None
-            
-            # إعادة التشغيل
-            print("يرجى إعادة تشغيل البوت...")
+            print("❌ الجلسة غير صالحة...")
             return
         
-        print("🔥 جاري بدء البوت...")
-        me = await client.get_me()
-        print(f"✅ تم تسجيل الدخول كـ: {me.first_name}")
-        print(f"🆔 ID: {me.id}")
-        
-        # تحميل الإضافات
+        print("🔥 جاري بدء البوت عبر البروكسي...")
         load_plugins()
-        print(f"📁 تم تحميل {len(PLUGINS_HELP)} إضافة")
-        
-        # رسالة بداية
-        await client.send_message("me", f"**✅ البوت يعمل الآن!**\n**الوقت:** {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        print("=" * 50)
-        print("🎯 البوت جاهز للاستخدام!")
-        print("⚡ الأوامر المتاحة: .الاوامر")
-        print("🔄 التحديث: .تحديث")
-        print("=" * 50)
-        
-        # تشغيل البوت
+        await client.send_message("me", f"**✅ سورس كـومـن Pro يعمل الآن!**\n**الوضع:** {'بروكسي' if USE_PROXY else 'مباشر'}")
         await client.run_until_disconnected()
         
     except Exception as e:
         print(f"❌ خطأ في التشغيل: {e}")
-        print("جاري إعادة المحاولة خلال 10 ثواني...")
         await asyncio.sleep(10)
-        await start_bot()  # إعادة محاولة
+        await start_bot()
 
 if __name__ == "__main__":
-    # ضمان استمرارية التشغيل
     while True:
         try:
             asyncio.run(start_bot())
         except KeyboardInterrupt:
-            print("\n⏹ إيقاف البوت...")
             break
         except Exception as e:
-            print(f"⚠️ إعادة التشغيل بسبب خطأ: {e}")
             time.sleep(5)
             continue
