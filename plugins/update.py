@@ -1,289 +1,449 @@
 # plugins/update.py
-import os, sys, subprocess, asyncio, time, shutil
-from telethon import events
-from __main__ import client
+"""
+🔄 نظام التحديث المتكامل
+✅ يدعم جميع المحركات - بدون مشاكل - استمرارية كاملة
+"""
 
-SECTION_NAME = "🔄 قـسـم الـتـحـديـث"
-COMMANDS = """• `.تحديث` : لـتـحـديـث الـسـورس مـن الـمـسـتـودع
-• `.اعادة تشغيل` : إعـادة تـشـغـيـل الـبـوت
-• `.اصلاح جيت` : إصـلاح مـشـاكـل Git
-• `.فحص تحديث` : فـحـص الـتـحـديـثـات"""
+import os
+import sys
+import asyncio
+import subprocess
+import time
+import importlib
+import shutil
+import json
+from datetime import datetime
+from pathlib import Path
 
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحديث$'))
-async def update_bot(event):
-    """تحديث السورس من جيت هاب"""
-    msg = await event.edit("🔄 **جـارِ الـتـحـديـث...**\n"
-                          "⏳ **سـيـسـتـغـرق ذلـك بـضـعـة ثـوانـي**")
+from telethon import events, Button
+from __main__ import client, bot_info, load_plugins
+
+# ==================== الإعدادات ====================
+SECTION_NAME = "🔄 نظام التحديث"
+COMMANDS = """• `.تحديث` - تحديث السورس من GitHub
+• `.فحص تحديث` - فحص التحديثات المتاحة
+• `.اعادة تشغيل` - إعادة تشغيل البوت
+• `.تحديث الاضافات` - تحديث الإضافات فقط
+• `.نسخ احتياطي` - نسخ احتياطي للجلسة
+• `.حالة النظام` - معلومات النظام"""
+
+# ==================== المتغيرات العالمية ====================
+UPDATE_LOG_FILE = "update_log.json"
+BACKUP_DIR = "backups"
+REPO_URL = "https://github.com/your-username/comun-pro.git"
+
+# ==================== دوال المساعدة ====================
+def log_update(action: str, status: str, details: str = ""):
+    """تسجيل عمليات التحديث"""
+    log_data = {
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "status": status,
+        "details": details[:500]
+    }
     
     try:
-        # التحقق من وجود Git
-        if not shutil.which("git"):
-            await msg.edit("❌ **Git غـيـر مـثـبـت!**\n"
-                          "📥 يـرجـى تـثـبـيـت Git أولاً:\n"
-                          "`apt install git` أو `pkg install git`")
-            return
-        
-        # التحقق من أننا في مستودع Git
-        if not os.path.exists(".git"):
-            await msg.edit("❌ **لـيـس مـسـتـودع Git!**\n"
-                          "📁 إسـتـخـدم `.اصلاح جيت` لـحـل الـمـشـكـلـة")
-            return
-        
-        # 1. حفظ التغييرات المحلية
-        await msg.edit("🔄 **جـارِ الـتـحـديـث...**\n"
-                      "💾 **حـفـظ الـتـغـيـيـرات الـمـحـلـيـة...**")
-        
-        try:
-            subprocess.run(["git", "stash"], 
-                          capture_output=True, 
-                          text=True, 
-                          check=True)
-        except:
-            pass  # تجاهل إذا لا توجد تغييرات
-        
-        # 2. جلب التحديثات
-        await msg.edit("🔄 **جـارِ الـتـحـديـث...**\n"
-                      "📥 **جـلـب الـتـحـديـثـات الـجـديـدة...**")
-        
-        start_time = time.time()
-        
-        # جلب آخر التحديثات
-        fetch_result = subprocess.run(["git", "fetch", "origin"],
-                                     capture_output=True,
-                                     text=True,
-                                     encoding='utf-8')
-        
-        if fetch_result.returncode != 0:
-            await msg.edit(f"❌ **فـشـل فـي جـلـب الـتـحـديـثـات:**\n"
-                          f"```\n{fetch_result.stderr[:300]}\n```")
-            return
-        
-        # 3. دمج التحديثات (بدون تعارضات)
-        await msg.edit("🔄 **جـارِ الـتـحـديـث...**\n"
-                      "🔀 **دمـج الـتـحـديـثـات...**")
-        
-        # استخدام reset --hard للتأكد من المزامنة
-        reset_result = subprocess.run(["git", "reset", "--hard", "origin/main"],
-                                     capture_output=True,
-                                     text=True,
-                                     encoding='utf-8')
-        
-        if reset_result.returncode != 0:
-            # محاولة pull عادي
-            pull_result = subprocess.run(["git", "pull", "--no-rebase"],
-                                        capture_output=True,
-                                        text=True,
-                                        encoding='utf-8')
-            
-            if pull_result.returncode != 0:
-                error_msg = pull_result.stderr or pull_result.stdout
-                await msg.edit(f"❌ **فـشـل فـي تـحـديـث الـسـورس:**\n"
-                              f"```\n{error_msg[:400]}\n```"
-                              f"\n🛠 **حـاول إسـتـخـدام:** `.اصلاح جيت`")
-                return
-            else:
-                output = pull_result.stdout
+        if os.path.exists(UPDATE_LOG_FILE):
+            with open(UPDATE_LOG_FILE, "r", encoding="utf-8") as f:
+                logs = json.load(f)
         else:
-            output = reset_result.stdout
+            logs = []
         
-        end_time = time.time()
-        elapsed = round(end_time - start_time, 2)
+        logs.append(log_data)
+        if len(logs) > 50:  # حفظ آخر 50 عملية فقط
+            logs = logs[-50:]
         
-        # 4. تحديث الإضافات
-        await msg.edit("✅ **تـم تـحـديـث الـكـود!**\n"
-                      "🔄 **جـارِ تـحـديـث الإضـافـات...**")
+        with open(UPDATE_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=2, ensure_ascii=False)
+    except:
+        pass
+
+def create_backup():
+    """إنشاء نسخة احتياطية"""
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            os.makedirs(BACKUP_DIR)
+        
+        backup_name = f"backup_{int(time.time())}"
+        backup_path = os.path.join(BACKUP_DIR, backup_name)
+        
+        # نسخ الملفات المهمة
+        important_files = [
+            "main.py",
+            "plugins/",
+            "requirements.txt",
+            "session.txt" if os.path.exists("session.txt") else None,
+            "comun_session.txt" if os.path.exists("comun_session.txt") else None
+        ]
+        
+        os.makedirs(backup_path, exist_ok=True)
+        
+        for item in important_files:
+            if item and os.path.exists(item):
+                if item.endswith('/'):
+                    shutil.copytree(item, os.path.join(backup_path, item), 
+                                  dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, backup_path)
+        
+        return backup_path, backup_name
+    except Exception as e:
+        return None, str(e)
+
+def run_git_command(cmd):
+    """تنفيذ أمر git بأمان"""
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True if isinstance(cmd, str) else False,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            timeout=30
+        )
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return -1, "", "المهلة انتهت"
+    except Exception as e:
+        return -1, "", str(e)
+
+def check_git_status():
+    """فحص حالة Git"""
+    try:
+        # التحقق من وجود Git
+        returncode, stdout, stderr = run_git_command(["git", "--version"])
+        if returncode != 0:
+            return False, "Git غير مثبت"
+        
+        # التحقق من كون المجلد مخزن Git
+        returncode, stdout, stderr = run_git_command(["git", "status"])
+        if returncode != 0:
+            return False, "المجلد ليس مخزن Git"
+        
+        return True, "Git جاهز"
+    except Exception as e:
+        return False, str(e)
+
+# ==================== الأحداث الرئيسية ====================
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.تحديث$'))
+async def update_command(event):
+    """تحديث كامل للسورس"""
+    msg = await event.edit("🔄 **جاري التحضير للتحديث...**")
+    
+    # التحقق من Git
+    git_ready, git_msg = check_git_status()
+    if not git_ready:
+        await msg.edit(f"❌ **خطأ في Git:**\n`{git_msg}`")
+        return
+    
+    # المرحلة 1: إنشاء نسخة احتياطية
+    await msg.edit("🔄 **جاري التحضير للتحديث...**\n"
+                   "📦 **المرحلة 1:** إنشاء نسخة احتياطية")
+    
+    backup_path, backup_result = create_backup()
+    if backup_path:
+        log_update("backup", "success", f"Backup created: {backup_result}")
+    else:
+        log_update("backup", "failed", backup_result)
+    
+    # المرحلة 2: جلب التحديثات
+    await msg.edit("🔄 **جاري التحضير للتحديث...**\n"
+                   "📥 **المرحلة 2:** جلب التحديثات من GitHub")
+    
+    returncode, stdout, stderr = run_git_command(["git", "fetch", "--all"])
+    if returncode != 0:
+        await msg.edit(f"❌ **فشل في جلب التحديثات:**\n```\n{stderr[:300]}\n```")
+        log_update("fetch", "failed", stderr[:200])
+        return
+    
+    # المرحلة 3: تطبيق التحديثات
+    await msg.edit("🔄 **جاري التحضير للتحديث...**\n"
+                   "⚡ **المرحلة 3:** تطبيق التحديثات")
+    
+    returncode, stdout, stderr = run_git_command(["git", "pull", "--rebase"])
+    if returncode != 0:
+        await msg.edit(f"❌ **فشل في تطبيق التحديثات:**\n```\n{stderr[:300]}\n```")
+        log_update("pull", "failed", stderr[:200])
+        return
+    
+    pull_output = stdout.strip()
+    
+    # التحقق إذا كان السورس محدث بالفعل
+    if "Already up to date" in pull_output or "Already up-to-date" in pull_output:
+        await msg.edit("✅ **السورس محدث بالفعل!**\n"
+                       "🎯 **أنت على آخر إصدار**")
+        log_update("update", "already_updated")
+        return
+    
+    # المرحلة 4: تحديث الإضافات
+    await msg.edit("🔄 **جاري التحضير للتحديث...**\n"
+                   "🔌 **المرحلة 4:** تحديث الإضافات")
+    
+    try:
+        old_plugins = len([f for f in os.listdir("plugins") if f.endswith('.py')])
+        load_plugins()
+        new_plugins = len([f for f in os.listdir("plugins") if f.endswith('.py')])
+    except Exception as e:
+        await msg.edit(f"⚠️ **تم التحديث ولكن حدث خطأ في الإضافات:**\n```\n{str(e)[:200]}\n```")
+        log_update("plugins", "error", str(e)[:200])
+        return
+    
+    # المرحلة 5: تثبيت المتطلبات
+    await msg.edit("🔄 **جاري التحضير للتحديث...**\n"
+                   "📦 **المرحلة 5:** تثبيت المتطلبات الجديدة")
+    
+    if os.path.exists("requirements.txt"):
+        returncode, stdout, stderr = run_git_command(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--upgrade"]
+        )
+        if returncode != 0:
+            log_update("requirements", "warning", stderr[:200])
+    
+    # النتيجة النهائية
+    update_summary = f"""
+✅ **تم التحديث بنجاح!**
+
+📊 **ملخص التحديث:**
+📥 **السحب:** {pull_output[:100]}...
+🔌 **الإضافات:** {old_plugins} → {new_plugins}
+📦 **النسخة الاحتياطية:** {'✅' if backup_path else '⚠️'}
+
+🔄 **جاري إعادة التشغيل خلال 3 ثواني...**
+"""
+    
+    await msg.edit(update_summary)
+    log_update("complete_update", "success", f"Plugins: {old_plugins}->{new_plugins}")
+    
+    # إعادة التشغيل بعد 3 ثواني
+    await asyncio.sleep(3)
+    await restart_bot(event, silent=True)
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.فحص تحديث$'))
+async def check_update_command(event):
+    """فحص التحديثات المتاحة"""
+    msg = await event.edit("🔍 **جاري فحص التحديثات...**")
+    
+    git_ready, git_msg = check_git_status()
+    if not git_ready:
+        await msg.edit(f"❌ **خطأ في Git:**\n`{git_msg}`")
+        return
+    
+    # جلب أحدث التحديثات
+    returncode, stdout, stderr = run_git_command(["git", "fetch"])
+    if returncode != 0:
+        await msg.edit(f"❌ **فشل في جلب المعلومات:**\n```\n{stderr[:200]}\n```")
+        return
+    
+    # مقارنة مع الفرع الحالي
+    returncode, stdout, stderr = run_git_command([
+        "git", "log", "HEAD..origin/main", "--oneline", "--no-merges"
+    ])
+    
+    if returncode != 0:
+        await msg.edit("❌ **فشل في مقارنة الفروع**")
+        return
+    
+    commits = [c for c in stdout.strip().split('\n') if c]
+    
+    if not commits:
+        await msg.edit("✅ **أنت على آخر إصدار!**\n"
+                       "🎯 **لا توجد تحديثات جديدة**")
+    else:
+        commits_count = len(commits)
+        last_commits = "\n".join([f"• {c[:60]}..." for c in commits[:5]])
+        
+        response = f"""
+📥 **يوجد {commits_count} تحديث جديد!**
+
+📋 **آخر {min(5, commits_count)} تحديث:**
+{last_commits}
+
+💡 **استخدم `.تحديث` لتنزيل التحديثات**
+        """
+        
+        if commits_count > 5:
+            response += f"\n📌 **و {commits_count - 5} تحديثات أخرى...**"
+        
+        await msg.edit(response)
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.اعادة تشغيل$'))
+async def restart_command(event, silent=False):
+    """إعادة تشغيل البوت"""
+    if not silent:
+        msg = await event.edit("🔄 **جاري إعادة التشغيل...**")
+    else:
+        try:
+            msg = await event.client.send_message(event.chat_id, "🔄 **إعادة تشغيل تلقائية...**")
+        except:
+            return
+    
+    try:
+        # حفظ الجلسة إذا كانت موجودة
+        session_files = ["session.txt", "comun_session.txt"]
+        for session_file in session_files:
+            if os.path.exists(session_file):
+                backup_file = f"{session_file}.backup_{int(time.time())}"
+                shutil.copy2(session_file, backup_file)
+        
+        # رسالة الانتظار
+        if not silent:
+            await msg.edit("✅ **تم حفظ الجلسة!\n🔄 جاري إعادة التشغيل...**")
+        
+        # إعادة التشغيل بعد تأخير قصير
+        await asyncio.sleep(2)
+        
+        # إعادة التشغيل النظيفة
+        os.execl(sys.executable, sys.executable, *sys.argv)
+        
+    except Exception as e:
+        if not silent:
+            await msg.edit(f"❌ **خطأ في إعادة التشغيل:**\n`{str(e)[:200]}`")
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.تحديث الاضافات$'))
+async def update_plugins_command(event):
+    """تحديث الإضافات فقط"""
+    msg = await event.edit("🔌 **جاري تحديث الإضافات...**")
+    
+    try:
+        # تعداد الإضافات قبل التحديث
+        plugins_before = []
+        plugins_dir = Path("plugins")
+        if plugins_dir.exists():
+            plugins_before = [f.name for f in plugins_dir.iterdir() if f.suffix == '.py']
         
         # إعادة تحميل الإضافات
         from __main__ import load_plugins
-        try:
-            load_plugins()
-            plugins_count = len([f for f in os.listdir("plugins") if f.endswith(".py")])
-        except:
-            plugins_count = 0
+        load_plugins()
         
-        # عرض النتيجة
-        if "Already up to date" in output or "Already up-to-date" in output:
-            await msg.edit(f"✅ **الـسـورس مـتـاحـث إلـى أحـدث إصـدار!**\n"
-                          f"⏱ **الـوقـت:** `{elapsed} ثـانـيـة`\n"
-                          f"📁 **الإضـافـات:** {plugins_count}")
+        # تعداد الإضافات بعد التحديث
+        plugins_after = []
+        if plugins_dir.exists():
+            plugins_after = [f.name for f in plugins_dir.iterdir() if f.suffix == '.py']
+        
+        # تحليل النتيجة
+        updated = len(plugins_after) - len(plugins_before)
+        
+        if updated > 0:
+            message = f"✅ **تم تحديث الإضافات!**\n📁 **إضافة {updated} إضافات جديدة**"
+        elif updated < 0:
+            message = f"⚠️ **تم تحديث الإضافات**\n📁 **تمت إزالة {abs(updated)} إضافات**"
         else:
-            await msg.edit(f"✅ **تـم الـتـحـديـث بـنـجـاح!**\n"
-                          f"📊 **الـمـخـرج:** `{output[:150]}...`\n"
-                          f"⏱ **الـوقـت:** `{elapsed} ثـانـيـة`\n"
-                          f"📁 **الإضـافـات:** {plugins_count}")
+            message = "✅ **تم تحديث الإضافات!**\n📁 **عدد الإضافات لم يتغير**"
         
-        # استعادة التغييرات المحلية
-        try:
-            subprocess.run(["git", "stash", "pop"], 
-                          capture_output=True, 
-                          text=True)
-        except:
-            pass
+        # عرض الإضافات الجديدة إن وجدت
+        new_plugins = set(plugins_after) - set(plugins_before)
+        if new_plugins:
+            message += f"\n\n✨ **الإضافات الجديدة:**\n"
+            for plugin in list(new_plugins)[:5]:
+                message += f"• `{plugin}`\n"
+            if len(new_plugins) > 5:
+                message += f"• و {len(new_plugins) - 5} أكثر..."
         
-    except FileNotFoundError:
-        await msg.edit("❌ **Git غـيـر مـثـبـت!**\n"
-                      "📥 يـرجـى تـثـبـيـت Git أولاً")
-    except Exception as e:
-        await msg.edit(f"❌ **خـطـأ غـيـر مـتـوقـع:**\n"
-                      f"```\n{str(e)[:400]}\n```")
-
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.اصلاح جيت$'))
-async def fix_git(event):
-    """إصلاح مشاكل Git"""
-    msg = await event.edit("🔧 **جـارِ إصـلاح مـشـاكـل Git...**")
-    
-    steps = []
-    
-    try:
-        # 1. تهيئة Git إذا لم تكن موجودة
-        if not os.path.exists(".git"):
-            steps.append("📁 **إنـشـاء مـسـتـودع جـديـد...**")
-            result = subprocess.run(["git", "init"],
-                                  capture_output=True,
-                                  text=True,
-                                  encoding='utf-8')
-            if result.returncode == 0:
-                steps.append("✅ تـم إنـشـاء الـمـسـتـودع")
-        
-        # 2. إضافة remote إذا لم يكن موجوداً
-        remote_result = subprocess.run(["git", "remote", "-v"],
-                                     capture_output=True,
-                                     text=True,
-                                     encoding='utf-8')
-        
-        if "origin" not in remote_result.stdout:
-            steps.append("🔗 **إضـافـة الـمـسـتـودع الأصـلـي...**")
-            # سيحتاج المستخدم لتعيين رابط المستودع
-            await msg.edit("🔧 **يـجـب عـيـيـن رابـط الـمـسـتـودع:**\n"
-                          "استخدم:\n"
-                          "`git remote add origin <رابط_المستودع>`\n\n"
-                          "ثم حاول `.تحديث` مرة أخرى")
-            return
-        
-        # 3. إصلاح أذونات الملفات
-        steps.append("🔒 **تـصـحـيـح أخـلاصـيـة الـمـلـفـات...**")
-        for root, dirs, files in os.walk("."):
-            for file in files:
-                if file.endswith(".sh") or file == "config.py":
-                    try:
-                        os.chmod(os.path.join(root, file), 0o755)
-                    except:
-                        pass
-        
-        steps.append("✅ **تـم الإصـلاح بـنـجـاح!**")
-        
-        await msg.edit(f"🔧 **تـقـريـر الإصـلاح:**\n\n" + "\n".join(steps))
+        await msg.edit(message)
+        log_update("plugins_update", "success", f"Plugins: {len(plugins_before)}->{len(plugins_after)}")
         
     except Exception as e:
-        await msg.edit(f"❌ **فـشـل فـي الإصـلاح:**\n"
-                      f"```\n{str(e)[:300]}\n```")
+        await msg.edit(f"❌ **خطأ في تحديث الإضافات:**\n`{str(e)[:200]}`")
+        log_update("plugins_update", "failed", str(e)[:200])
 
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.فحص تحديث$'))
-async def check_update(event):
-    """فحص التحديثات المتوفرة"""
-    msg = await event.edit("🔍 **جـارِ فـحـص الـتـحـديـثـات...**")
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.نسخ احتياطي$'))
+async def backup_command(event):
+    """إنشاء نسخة احتياطية"""
+    msg = await event.edit("💾 **جاري إنشاء نسخة احتياطية...**")
     
-    try:
-        if not os.path.exists(".git"):
-            await msg.edit("❌ **لـيـس مـسـتـودع Git!**\n"
-                          "إسـتـخـدم `.اصلاح جيت` أولاً")
-            return
-        
-        # جلب آخر التحديثات
-        subprocess.run(["git", "fetch"], 
-                      capture_output=True, 
-                      text=True)
-        
-        # مقارنة الفروع
-        result = subprocess.run(["git", "log", "HEAD..origin/main", "--oneline"],
-                              capture_output=True,
-                              text=True,
-                              encoding='utf-8')
-        
-        commits = [c for c in result.stdout.strip().split('\n') if c]
-        
-        if not commits:
-            await msg.edit("✅ **أنـت عـلـى آخـر إصـدار!**\n"
-                          "🎯 **لا تـوجـد تـحـديـثـات جـديـدة**")
-        else:
-            updates_count = len(commits)
-            last_updates = "\n".join(commits[:5])
-            
-            await msg.edit(f"📥 **يـوجـد {updates_count} تـحـديـث جـديـد!**\n\n"
-                          f"**آخـر {min(5, updates_count)} تـحـديـث:**\n"
-                          f"```\n{last_updates}\n```\n\n"
-                          f"🎯 اسـتـخـدم `.تحديث` لـتـنـزيـل الـتـحـديـثـات")
-        
-    except Exception as e:
-        await msg.edit(f"❌ **خـطـأ فـي فـحـص الـتـحـديـثـات:**\n"
-                      f"```\n{str(e)[:300]}\n```")
-
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.اعادة تشغيل$'))
-async def restart_bot(event):
-    """إعادة تشغيل البوت"""
-    msg = await event.edit("🔄 **جـارِ إعـادة الـتـشـغـيـل...**")
+    backup_path, backup_result = create_backup()
     
-    try:
-        # حفظ الجلسة
-        from __main__ import save_session, SESSION_STR
-        if SESSION_STR:
-            save_session(SESSION_STR)
+    if backup_path:
+        # حساب حجم النسخة الاحتياطية
+        total_size = 0
+        for dirpath, dirnames, filenames in os.walk(backup_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if os.path.exists(fp):
+                    total_size += os.path.getsize(fp)
         
-        await asyncio.sleep(2)
-        await msg.edit("✅ **تـم إعـادة الـتـشـغـيـل!**")
+        size_mb = total_size / (1024 * 1024)
         
-        # إعادة التشغيل
-        python = sys.executable
-        os.execl(python, python, *sys.argv)
-        
-    except Exception as e:
-        await msg.edit(f"❌ **فـشـل إعـادة الـتـشـغـيـل:**\n`{str(e)[:200]}`")
+        await msg.edit(f"""
+✅ **تم إنشاء النسخة الاحتياطية!**
 
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.حالة النظام$'))
-async def system_status(event):
+📁 **المعلومات:**
+• **الاسم:** `{backup_result}`
+• **المسار:** `{backup_path}`
+• **الحجم:** `{size_mb:.2f} MB`
+• **الوقت:** `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`
+
+💡 **النسخة محفوظة في مجلد `backups/`**
+""")
+        log_update("manual_backup", "success", backup_result)
+    else:
+        await msg.edit(f"❌ **فشل في إنشاء النسخة الاحتياطية:**\n`{backup_result}`")
+        log_update("manual_backup", "failed", backup_result)
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'^\.حالة النظام$'))
+async def system_status_command(event):
     """عرض حالة النظام"""
-    import psutil
-    
-    msg = await event.edit("📊 **جـارِ جـمـع مـعـلـومـات الـنـظـام...**")
-    
     try:
+        # جمع المعلومات
+        import platform
+        import psutil
+        
         # معلومات النظام
-        cpu_percent = psutil.cpu_percent(interval=1)
+        system_info = {
+            "النظام": platform.system(),
+            "الإصدار": platform.release(),
+            "المعالج": platform.processor(),
+            "بايثون": platform.python_version(),
+        }
+        
+        # معلومات الذاكرة
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage('.')
         
-        # معلومات Git
-        git_status = "❌ غير مثبت"
-        git_version = ""
+        # معلومات البوت
+        bot_dir = Path(".")
+        plugins_count = len([f for f in bot_dir.glob("plugins/*.py") if f.is_file()])
+        session_files = len([f for f in bot_dir.glob("*.txt") if "session" in f.name])
         
-        if shutil.which("git"):
-            git_status = "✅ مثبت"
-            result = subprocess.run(["git", "--version"],
-                                  capture_output=True,
-                                  text=True)
-            git_version = result.stdout.strip()
+        # معلومات التحديث
+        update_logs = []
+        if os.path.exists(UPDATE_LOG_FILE):
+            with open(UPDATE_LOG_FILE, "r", encoding="utf-8") as f:
+                update_logs = json.load(f)
         
-        # معلومات Python
-        python_version = sys.version.split()[0]
+        last_update = update_logs[-1]["timestamp"] if update_logs else "لا يوجد"
         
-        status_text = (
-            f"📊 **حـالـة الـنـظـام:**\n"
-            f"═══════════════════\n"
-            f"**💻 الـمـعـالـج:** {cpu_percent}%\n"
-            f"**🧠 الـذاكـرة:** {memory.percent}%\n"
-            f"**💾 الـتـخـزيـن:** {disk.percent}%\n"
-            f"═══════════════════\n"
-            f"**🐍 Python:** {python_version}\n"
-            f"**🔄 Git:** {git_status}\n"
-            f"{git_version}\n"
-            f"═══════════════════\n"
-            f"**📁 الـمـلـفـات:** {len(os.listdir('.'))}\n"
-            f"**🔌 الإضـافـات:** {len([f for f in os.listdir('plugins') if f.endswith('.py')]) if os.path.exists('plugins') else 0}"
-        )
+        # بناء الرسالة
+        status_msg = f"""
+🖥 **حالة النظام - {BOT_NAME}**
+
+📊 **معلومات النظام:**
+"""
+        for key, value in system_info.items():
+            status_msg += f"• **{key}:** `{value}`\n"
         
-        await msg.edit(status_text)
+        status_msg += f"""
+💾 **الذاكرة والقرص:**
+• **الذاكرة:** `{memory.percent}%` مستخدم
+• **القرص:** `{disk.percent}%` مستخدم
+• **المساحة الحرة:** `{disk.free / (1024**3):.1f} GB`
+
+🤖 **معلومات البوت:**
+• **الإصدار:** `{VERSION}`
+• **عدد الإضافات:** `{plugins_count}`
+• **ملفات الجلسة:** `{session_files}`
+• **آخر تحديث:** `{last_update[:19]}`
+
+🔄 **استخدم `.تحديث` للتحديث**
+"""
+        
+        await event.edit(status_msg)
         
     except ImportError:
-        await msg.edit("❌ **يـجـب تـثـبـيـت psutil:**\n`pip install psutil`")
-    except Exception as e:
-        await msg.edit(f"❌ **خـطـأ:**\n`{str(e)[:300]}`")
+        # إذا لم يكن psutil مثبتاً
+        await event.edit("""
+📊 **حالة النظام الأساسية:**
+
+⚠️ **لتثبيت المميزات الكاملة:**
+```bash
+pip install psutil
