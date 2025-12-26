@@ -2,92 +2,73 @@ import os
 import asyncio
 import yt_dlp
 from telethon import events
-from __main__ import client # استيراد العميل من المحرك الأساسي
+from __main__ import client # استيراد العميل الأساسي
 
-# --- بيانات القسم للوحة الأوامر التلقائية ---
-SECTION_NAME = "📥 والـبـحـثـمـيـل الـتـحـمـيـل والـبـحـث الشامل"
-COMMANDS = (
-    "• `.بحث_فيد` + الاسم : بـحث عـن فـيـديـو وتـحـمـيـلـه فـوراً\n"
-    "• `.بحث_صوت` + الاسم : بـحث عـن مـقـطـع وتـحـمـيـلـه MP3\n"
-    "• `.فيديو` + الرابط : تـحـمـيـل فـيـديـو مـن أي مـنـصـة\n"
-    "• `.صوت` + الرابط : تـحـمـيـل صـوت MP3 مـن أي مـنـصـة"
-)
+# --- إعدادات القسم للوحة التلقائية ---
+SECTION_NAME = "🚀 مـركـز الـتـحـمـيـل الـسـريـع"
+COMMANDS = "• `.ميديا` : لـعـرض كـافـة خـيـارات الـتـحـمـيـل والـبـحـث"
 
-# دالة إعدادات التحميل الاحترافية لتجنب الحظر
-def get_safe_settings(is_audio=False):
-    opts = {
-        "format": "bestaudio/best" if is_audio else "bestvideo+bestaudio/best",
-        "outtmpl": "downloads/%(title)s.%(ext)s",
-        "addmetadata": True,
-        "geo_bypass": True,
-        "nocheckcertificate": True,
-        "quiet": True,
-        "no_warnings": True,
-        "ignoreerrors": True,
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "referer": "https://www.google.com/",
+# إعدادات yt-dlp المحسنة للسرعة القصوى وتجاوز الحظر
+def get_fast_opts(is_audio=False):
+    return {
+        'format': 'bestaudio/best' if is_audio else 'best',
+        'outtmpl': 'downloads/%(id)s.%(ext)s',
+        'no_warnings': True,
+        'quiet': True,
+        'nocheckcertificate': True,
+        'geo_bypass': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     }
-    if is_audio:
-        opts["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }]
-    return opts
 
-async def run_common_download(event, url, is_audio=False):
+# 1. الأمر الرئيسي (لوحة التحكم)
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.ميديا'))
+async def media_hub(event):
+    await event.edit("""
+╔════════════════════╗
+      **🎬 مـركـز مـيـديـا كـومـن Pro**
+╚════════════════════╝
+
+**📥 أوامر التحميل المباشر:**
+• `.فيديو` <رابط> : تـحـمـيل فـيـديـو سـريـع
+• `.صوت` <رابط> : تـحـمـيل مـلـف صـوتـي
+
+**🔍 أوامر البحث والتحميل:**
+• `.بحث_فيد` <اسم> : تـحـمـيل أول نـتـيـجـة فـيـديـو
+• `.بحث_صوت` <اسم> : تـحـمـيل أول نـتـيـجـة صـوت
+
+───━━━━─ ● ─━━━━───
+🚀 **السرعة:** فـائـقـة (uvloop Active)
+💎 **المطور:** @iomk0 | **القناة:** @iomk3
+""")
+
+# دالة التحميل المشتركة فائقة السرعة
+async def download_engine(event, url, audio=False):
     try:
-        def download_process():
-            with yt_dlp.YoutubeDL(get_safe_settings(is_audio)) as ydl:
+        def start_down():
+            with yt_dlp.YoutubeDL(get_fast_opts(audio)) as ydl:
                 info = ydl.extract_info(url, download=True)
-                if 'entries' in info: # معالجة نتائج البحث
-                    info = info['entries'][0]
-                filename = ydl.prepare_filename(info)
-                if is_audio:
-                    filename = filename.rsplit(".", 1)[0] + ".mp3"
-                return filename, info.get('title', 'Unknown')
+                if 'entries' in info: info = info['entries'][0]
+                return ydl.prepare_filename(info), info.get('title', 'Common_File')
 
-        file_path, title = await asyncio.to_thread(download_process)
+        # تشغيل التحميل في خيط منفصل لعدم تعليق السورس
+        path, title = await asyncio.to_thread(start_down)
         
-        if not os.path.exists(file_path):
-             return await event.edit("❌ **فـشـل الـتـحـمـيـل: الـمـوقـع حـظر الاتـصـال حـالـياً.**")
-
         await event.edit(f"📤 **جـارِ رفـع: {title}...**")
-        await client.send_file(
-            event.chat_id, 
-            file_path, 
-            caption=f"✅ **تـم تـحـمـيـل الـطـلـب بـنـجـاح**\n📌 `{title}`",
-            reply_to=event.reply_to_msg_id
-        )
+        await client.send_file(event.chat_id, path, caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{title}`")
         await event.delete()
-        if os.path.exists(file_path): os.remove(file_path)
+        if os.path.exists(path): os.remove(path)
     except Exception as e:
-        await event.edit(f"❌ **حـدث خـطأ فـي الـمـحـرك:**\n`{str(e)[:100]}`")
+        await event.edit(f"❌ **خـطأ:** `{str(e)[:50]}`")
 
-# 1. بحث وتحميل فيديو بالاسم
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_فيد (.*)'))
-async def search_vid_pro(event):
-    query = event.pattern_match.group(1)
-    await event.edit(f"🔍 **جـارِ الـبـحـث عـن فـيـديـو: `{query}`...**")
-    await run_common_download(event, f"ytsearch1:{query}", False)
-
-# 2. بحث وتحميل صوت بالاسم
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_صوت (.*)'))
-async def search_aud_pro(event):
-    query = event.pattern_match.group(1)
-    await event.edit(f"🔍 **جـارِ الـبـحـث عـن صـوت: `{query}`...**")
-    await run_common_download(event, f"ytsearch1:{query}", True)
-
-# 3. تحميل فيديو برابط مباشر (أي منصة)
+# --- محركات التشغيل الخلفية ---
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.فيديو (.*)'))
-async def link_vid_pro(event):
-    url = event.pattern_match.group(1)
-    await event.edit("🎬 **جـارِ تـحـمـيـل الـفـيـديـو مـن الـرابـط بـالنظام الآمـن...**")
-    await run_common_download(event, url, False)
+async def dv(event): await download_engine(event, event.pattern_match.group(1), False)
 
-# 4. تحميل صوت برابط مباشر (أي منصة)
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.صوت (.*)'))
-async def link_aud_pro(event):
-    url = event.pattern_match.group(1)
-    await event.edit("🎵 **جـارِ تـحـمـيـل الـصـوت مـن الـرابـط بـالنظام الآمـن...**")
-    await run_common_download(event, url, True)
+async def da(event): await download_engine(event, event.pattern_match.group(1), True)
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_فيد (.*)'))
+async def sv(event): await download_engine(event, f"ytsearch1:{event.pattern_match.group(1)}", False)
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_صوت (.*)'))
+async def sa(event): await download_engine(event, f"ytsearch1:{event.pattern_match.group(1)}", True)
