@@ -1,77 +1,97 @@
 import os
-import yt_dlp
 import asyncio
+import yt_dlp
 from telethon import events
 from __main__ import client # استيراد العميل من المحرك الأساسي
 
 # --- بيانات القسم للوحة الأوامر التلقائية ---
-SECTION_NAME = "🎬 قـسـم الـفـيـديـو الـمـطـور"
+SECTION_NAME = "📥 قـسـم الـتـحـمـيـل الـخـارق"
 COMMANDS = (
-    "• `.تحميل_فيد` <رابط> : تـحـمـيل فـيـديـو مـن أي مـنـصـة (TikTok, YT, IG)\n"
-    "• `.بحث_فيد` <اسم> : الـبـحث عـن فـيـديـو وتـحـمـيـلـه تـلـقـائـيـاً"
+    "• `.صوت` + الرابط : تـحـمـيـل مـلـف صـوتـي عـالـي الـجـودة\n"
+    "• `.فيديو` + الرابط : تـحـمـيـل مـقـطـع فـيـديـو بـأعـلى دقـة\n"
+    "• `.تحميل` + الرابط : الـتـحـمـيـل الـتـلـقـائـي (فـيـديـو/صـورة)"
 )
 
-# إعدادات المحرك لتحميل الفيديو بأفضل جودة
-def get_video_opts():
+# دالة إعدادات التحميل الاحترافية
+def get_pro_opts(is_audio=True):
     return {
-        "format": "best",
+        "format": "bestaudio/best" if is_audio else "bestvideo+bestaudio/best",
+        "outtmpl": "downloads/%(title)s.%(ext)s",
         "addmetadata": True,
         "geo-bypass": True,
         "nocheckcertificate": True,
         "quiet": True,
-        "outtmpl": "downloads/%(id)s.%(ext)s",
+        "no_warnings": True,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }] if is_audio else [],
     }
 
-# 1. أمر تحميل الفيديو عبر الرابط (أي منصة)
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحميل_فيد (.*)'))
-async def vid_downloader(event):
+# 1. أمر تحميل الصوت (MP3)
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.صوت (.*)'))
+async def pro_audio_down(event):
     url = event.pattern_match.group(1)
     if not url:
-        return await event.edit("⚠️ **الـرجـاء وضـع رابـط الـفـيـديـو الـمـطلـوب.**")
+        return await event.edit("⚠️ **الـرجـاء وضـع رابـط الـمـقـطـع لـتـحـمـيـله كـصـوت.**")
     
-    await event.edit("🎬 **جـارِ تـحـلـيـل الـرابـط وجـلـب الـفـيـديـو...**")
+    await event.edit("🎵 **جـارِ مـعـالـجـة الـرابـط واسـتـخـراج الـصـوت...**")
     
     try:
-        with yt_dlp.YoutubeDL(get_video_opts()) as ydl:
-            info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
-            
-            await event.edit("📤 **جـارِ رفـع الـفـيـديـو بـأعـلـى جـودة...**")
-            await client.send_file(
-                event.chat_id, 
-                file_path, 
-                caption=f"✅ **تـم تـحـمـيل الـفـيـديـو بـنـجـاح**\n📌 **الـعنوان:** `{info.get('title', 'Video')}`\n🔗 **الـمنصة:** {info.get('extractor_key', 'Unknown')}",
-                reply_to=event.reply_to_msg_id
-            )
-            await event.delete()
-            if os.path.exists(file_path): os.remove(file_path)
-    except Exception as e:
-        await event.edit(f"❌ **حـدث خـطأ أثـنـاء الـتـحـمـيل:**\n`{str(e)[:150]}`")
+        # استخدام asyncio.to_thread لمنع تعليق السورس أثناء التحميل
+        def download():
+            with yt_dlp.YoutubeDL(get_pro_opts(True)) as ydl:
+                info = ydl.extract_info(url, download=True)
+                return ydl.prepare_filename(info).rsplit(".", 1)[0] + ".mp3", info['title']
 
-# 2. أمر البحث عن فيديو وتحميله بالاسم
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_فيد (.*)'))
-async def vid_searcher(event):
-    query = event.pattern_match.group(1)
-    if not query:
-        return await event.edit("⚠️ **يـرجـى كـتـابـة اسـم الـفـيـديـو للـبـحـث عـنـه.**")
+        file_path, title = await asyncio.to_thread(download)
+        
+        await event.edit(f"📤 **تـم الـتـحـضـيـر! جـارِ رفـع: {title}**")
+        await client.send_file(
+            event.chat_id, 
+            file_path, 
+            caption=f"✅ **تـم تـحـمـيـل الـصـوت بـنـجـاح**\n📌 `{title}`",
+            reply_to=event.reply_to_msg_id
+        )
+        await event.delete()
+        if os.path.exists(file_path): os.remove(file_path)
+    except Exception as e:
+        await event.edit(f"❌ **خـطأ فـي الـتـحـمـيـل:**\n`{str(e)[:150]}`")
+
+# 2. أمر تحميل الفيديو (MP4)
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.فيديو (.*)'))
+async def pro_video_down(event):
+    url = event.pattern_match.group(1)
+    if not url:
+        return await event.edit("⚠️ **الـرجـاء وضـع رابـط الـفـيـديـو.**")
     
-    await event.edit(f"🔍 **جـارِ الـبـحـث عـن `{query}` وتـحـمـيـلـه...**")
+    await event.edit("🎬 **جـارِ تـحـمـيـل الـفـيـديـو بـأعـلى جـودة مـتـاحـة...**")
     
     try:
-        # البحث في يوتيوب وجلب أول نتيجة
-        search_url = f"ytsearch1:{query}"
-        with yt_dlp.YoutubeDL(get_video_opts()) as ydl:
-            info = ydl.extract_info(search_url, download=True)['entries'][0]
-            file_path = ydl.prepare_filename(info)
-            
-            await event.edit("📤 **جـد الـفـيـديـو! جـارِ الـرفـع الآن...**")
-            await client.send_file(
-                event.chat_id, 
-                file_path, 
-                caption=f"✅ **نـتـيـجـة الـبـحث والـتـحـمـيل:**\n📌 `{info.get('title')}`",
-                reply_to=event.reply_to_msg_id
-            )
-            await event.delete()
-            if os.path.exists(file_path): os.remove(file_path)
+        def download():
+            with yt_dlp.YoutubeDL(get_pro_opts(False)) as ydl:
+                info = ydl.extract_info(url, download=True)
+                return ydl.prepare_filename(info), info['title']
+
+        file_path, title = await asyncio.to_thread(download)
+        
+        await event.edit(f"📤 **جـارِ رفـع الـفـيـديـو: {title}**")
+        await client.send_file(
+            event.chat_id, 
+            file_path, 
+            caption=f"✅ **تـم تـحـمـيـل الـفـيـديـو بـنـجـاح**\n🎬 `{title}`",
+            reply_to=event.reply_to_msg_id
+        )
+        await event.delete()
+        if os.path.exists(file_path): os.remove(file_path)
     except Exception as e:
-        await event.edit(f"❌ **لـم يـتـم الـعـثـور عـلى نـتـائـج:**\n`{str(e)[:150]}`")
+        await event.edit(f"❌ **فـشـل الـتـحـمـيـل:**\n`{str(e)[:150]}`")
+
+# 3. أمر التحميل الذكي (تلقائي)
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحميل (.*)'))
+async def smart_down(event):
+    url = event.pattern_match.group(1)
+    await event.edit("🚀 **جـارِ الـفـحـص والـتـحـمـيـل الـتـلـقـائـي...**")
+    # يقوم بتحميل الفيديو كخيار افتراضي ذكي
+    await pro_video_down(event)
