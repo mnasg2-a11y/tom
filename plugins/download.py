@@ -5,16 +5,18 @@ from telethon import events
 from __main__ import client # استيراد العميل من المحرك الأساسي
 
 # --- بيانات القسم للوحة الأوامر التلقائية ---
-SECTION_NAME = "📥 قـسـم الـتـحـمـيـل الـخـارق"
+SECTION_NAME = "📥 مـحـرك الـتـحـمـيـل والـبـحـث الشامل"
 COMMANDS = (
-    "• `.صوت` + الرابط : تـحـمـيـل مـلـف صـوتـي عـالـي الـجـودة\n"
-    "• `.فيديو` + الرابط : تـحـمـيـل مـقـطـع فـيـديـو بـأعـلى دقـة\n"
-    "• `.تحميل` + الرابط : الـتـحـمـيـل الـتـلـقـائـي (فـيـديـو/صـورة)"
+    "• `.بحث_فيد` + الاسم : بـحث عـن فـيـديـو وتـحـمـيـلـه فـوراً\n"
+    "• `.بحث_صوت` + الاسم : بـحث عـن مـقـطـع وتـحـمـيـلـه MP3\n"
+    "• `.تحميل_فيد` + الرابط : تـحـمـيـل فـيـديـو مـن أي مـنـصـة\n"
+    "• `.تحميل_صوت` + الرابط : تـحـمـيـل صـوت MP3 مـن أي مـنـصـة"
 )
 
 # دالة إعدادات التحميل الاحترافية
-def get_pro_opts(is_audio=True):
-    return {
+def get_ytdl_settings(is_audio=False, is_search=False):
+    query = "ytsearch1:" if is_search else ""
+    opts = {
         "format": "bestaudio/best" if is_audio else "bestvideo+bestaudio/best",
         "outtmpl": "downloads/%(title)s.%(ext)s",
         "addmetadata": True,
@@ -22,76 +24,65 @@ def get_pro_opts(is_audio=True):
         "nocheckcertificate": True,
         "quiet": True,
         "no_warnings": True,
-        "postprocessors": [{
+    }
+    if is_audio:
+        opts["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
             "preferredquality": "192",
-        }] if is_audio else [],
-    }
+        }]
+    return opts
 
-# 1. أمر تحميل الصوت (MP3)
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.صوت (.*)'))
-async def pro_audio_down(event):
-    url = event.pattern_match.group(1)
-    if not url:
-        return await event.edit("⚠️ **الـرجـاء وضـع رابـط الـمـقـطـع لـتـحـمـيـله كـصـوت.**")
-    
-    await event.edit("🎵 **جـارِ مـعـالـجـة الـرابـط واسـتـخـراج الـصـوت...**")
-    
+async def run_download(event, url, opts, title_prefix=""):
     try:
-        # استخدام asyncio.to_thread لمنع تعليق السورس أثناء التحميل
-        def download():
-            with yt_dlp.YoutubeDL(get_pro_opts(True)) as ydl:
+        def download_process():
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-                return ydl.prepare_filename(info).rsplit(".", 1)[0] + ".mp3", info['title']
+                if 'entries' in info: # في حالة البحث
+                    info = info['entries'][0]
+                filename = ydl.prepare_filename(info)
+                if opts.get("postprocessors"):
+                    filename = filename.rsplit(".", 1)[0] + ".mp3"
+                return filename, info.get('title', 'Unknown')
 
-        file_path, title = await asyncio.to_thread(download)
+        file_path, title = await asyncio.to_thread(download_process)
         
-        await event.edit(f"📤 **تـم الـتـحـضـيـر! جـارِ رفـع: {title}**")
+        await event.edit(f"📤 **جـارِ رفـع: {title}...**")
         await client.send_file(
             event.chat_id, 
             file_path, 
-            caption=f"✅ **تـم تـحـمـيـل الـصـوت بـنـجـاح**\n📌 `{title}`",
+            caption=f"✅ **{title_prefix} بـنـجـاح**\n📌 `{title}`",
             reply_to=event.reply_to_msg_id
         )
         await event.delete()
         if os.path.exists(file_path): os.remove(file_path)
     except Exception as e:
-        await event.edit(f"❌ **خـطأ فـي الـتـحـمـيـل:**\n`{str(e)[:150]}`")
+        await event.edit(f"❌ **خـطأ:**\n`{str(e)[:100]}`")
 
-# 2. أمر تحميل الفيديو (MP4)
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.فيديو (.*)'))
-async def pro_video_down(event):
+# 1. بحث وتحميل فيديو
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_فيد (.*)'))
+async def search_vid(event):
+    query = event.pattern_match.group(1)
+    await event.edit(f"🔍 **جـارِ الـبـحـث عـن فـيـديـو: `{query}`...**")
+    await run_download(event, f"ytsearch1:{query}", get_ytdl_settings(False), "تـم تـحـمـيـل الـفـيـديـو")
+
+# 2. بحث وتحميل صوت
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_صوت (.*)'))
+async def search_aud(event):
+    query = event.pattern_match.group(1)
+    await event.edit(f"🔍 **جـارِ الـبـحـث عـن صـوت: `{query}`...**")
+    await run_download(event, f"ytsearch1:{query}", get_ytdl_settings(True), "تـم تـحـمـيـل الـصـوت")
+
+# 3. تحميل فيديو برابط
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحميل_فيد (.*)'))
+async def link_vid(event):
     url = event.pattern_match.group(1)
-    if not url:
-        return await event.edit("⚠️ **الـرجـاء وضـع رابـط الـفـيـديـو.**")
-    
-    await event.edit("🎬 **جـارِ تـحـمـيـل الـفـيـديـو بـأعـلى جـودة مـتـاحـة...**")
-    
-    try:
-        def download():
-            with yt_dlp.YoutubeDL(get_pro_opts(False)) as ydl:
-                info = ydl.extract_info(url, download=True)
-                return ydl.prepare_filename(info), info['title']
+    await event.edit("🎬 **جـارِ تـحـمـيـل الـفـيـديـو مـن الـرابـط...**")
+    await run_download(event, url, get_ytdl_settings(False), "تـم تـحـمـيـل الـفـيـديـو")
 
-        file_path, title = await asyncio.to_thread(download)
-        
-        await event.edit(f"📤 **جـارِ رفـع الـفـيـديـو: {title}**")
-        await client.send_file(
-            event.chat_id, 
-            file_path, 
-            caption=f"✅ **تـم تـحـمـيـل الـفـيـديـو بـنـجـاح**\n🎬 `{title}`",
-            reply_to=event.reply_to_msg_id
-        )
-        await event.delete()
-        if os.path.exists(file_path): os.remove(file_path)
-    except Exception as e:
-        await event.edit(f"❌ **فـشـل الـتـحـمـيـل:**\n`{str(e)[:150]}`")
-
-# 3. أمر التحميل الذكي (تلقائي)
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحميل (.*)'))
-async def smart_down(event):
+# 4. تحميل صوت برابط
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحميل_صوت (.*)'))
+async def link_aud(event):
     url = event.pattern_match.group(1)
-    await event.edit("🚀 **جـارِ الـفـحـص والـتـحـمـيـل الـتـلـقـائـي...**")
-    # يقوم بتحميل الفيديو كخيار افتراضي ذكي
-    await pro_video_down(event)
+    await event.edit("🎵 **جـارِ تـحـمـيـل الـصـوت مـن الـرابـط...**")
+    await run_download(event, url, get_ytdl_settings(True), "تـم تـحـمـيـل الـصـوت")
