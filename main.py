@@ -1,53 +1,80 @@
-import os
-import glob
-import importlib
-import logging
+import os, asyncio, sys, importlib, logging
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
+from dotenv import load_dotenv
 
-# --- الإعدادات التلقائية المدمجة ---
+# إعداد اللوجر للتنبيه بالأخطاء
+logging.basicConfig(level=logging.INFO)
+
+# 1. إعداد البيانات الأساسية (مدمجة لتعمل تلقائياً)
 API_ID = 22439859 
 API_HASH = '312858aa733a7bfacf54eede0c275db4'
-BOT_TOKEN = '8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU'
+# يتم طلب الجلسة مرة واحدة وحفظها في ملف .env
+ENV_FILE = ".env"
 
-# قاموس لتخزين معلومات الأقسام تلقائياً
+if not os.path.exists(ENV_FILE):
+    print("--- 🛠 إعداد البوت لأول مرة ---")
+    with TelegramClient(StringSession(), API_ID, API_HASH) as temp:
+        session_str = temp.session.save()
+    with open(ENV_FILE, "w") as f:
+        f.write(f"STRING_SESSION={session_str}\n")
+    print("✅ تم الحفظ! أعد تشغيل البوت الآن.")
+    exit()
+
+load_dotenv(ENV_FILE)
+
+# إنشاء العميل
+client = TelegramClient(StringSession(os.getenv("STRING_SESSION")), API_ID, API_HASH)
+
+# قاموس لتخزين معلومات الأقسام للوحة الأوامر
 PLUGINS_HELP = {}
 
-client = TelegramClient('CommonSession', API_ID, API_HASH)
-
+# 2. وظيفة تحميل الـ plugins الذكية
 def load_plugins():
-    """تحميل الأقسام وتسجيل معلوماتها تلقائياً"""
-    if not os.path.exists("plugins"):
-        os.makedirs("plugins")
-    
-    path = "plugins/*.py"
-    files = glob.glob(path)
-    for name in files:
-        plugin_name = name.replace(".py", "").replace("/", ".").replace("\\", ".")
-        # استيراد الملف كـ module
-        module = importlib.import_module(plugin_name)
-        
-        # التأكد من وجود متغيرات التعريف داخل ملف القسم
-        if hasattr(module, "SECTION_NAME") and hasattr(module, "COMMANDS"):
-            PLUGINS_HELP[module.SECTION_NAME] = module.COMMANDS
-            print(f"✅ تم تسجيل قسم: {module.SECTION_NAME}")
+    plugins_dir = "plugins"
+    if not os.path.exists(plugins_dir):
+        os.makedirs(plugins_dir)
+        return
 
-@client.on(events.NewMessage(pattern=r'\.الاوامر'))
-async def dynamic_menu(event):
-    """توليد لوحة الأوامر تلقائياً بناءً على الأقسام المحملة"""
-    header = "╔════════════════════╗\n      **🚀 سـورس كـومـن الـمـطـور**\n╚════════════════════╝\n"
+    # إضافة المجلد للمسار لكي يسهل استيراده
+    sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
     
-    menu_content = ""
-    # الدوران حول جميع الأقسام التي تم تحميلها تلقائياً
-    for section, commands in PLUGINS_HELP.items():
-        menu_content += f"\n**{section}:**\n{commands}\n"
+    for filename in os.listdir(plugins_dir):
+        if filename.endswith(".py") and not filename.startswith("__"):
+            module_name = f"plugins.{filename[:-3]}"
+            try:
+                # استيراد الموديل ككائن (Object)
+                module = importlib.import_module(module_name)
+                
+                # سحب بيانات القسم تلقائياً إذا كانت موجودة
+                if hasattr(module, "SECTION_NAME") and hasattr(module, "COMMANDS"):
+                    PLUGINS_HELP[module.SECTION_NAME] = module.COMMANDS
+                
+                print(f"✅ تم تحميل القسم: {module_name}")
+            except Exception as e:
+                print(f"❌ خطأ في تحميل {module_name}: {e}")
+
+# 3. أمر القائمة الرئيسية (تتحدث تلقائياً عند إضافة أي قسم)
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.الاوامر'))
+async def help_menu(event):
+    header = "╔════════════════════╗\n      **🚀 سـورس كـومـن الـمـطـور**\n╚════════════════════╝\n"
+    content = ""
+    
+    if not PLUGINS_HELP:
+        content = "\n⚠️ **لا توجد أقسام محملة حالياً في مجلد plugins.**"
+    else:
+        for section, commands in PLUGINS_HELP.items():
+            content += f"\n**{section}:**\n{commands}\n"
     
     footer = f"\n---\n📢 **القناة:** @iomk3 | 🛠 **المطور:** @iomk0"
-    
-    final_menu = header + menu_content + footer
-    await event.edit(final_menu)
+    await event.edit(header + content + footer)
+
+async def start_userbot():
+    load_plugins()
+    await client.start()
+    me = await client.get_me()
+    print(f"✅ متصل الآن باسم: {me.first_name}")
+    await client.run_until_disconnected()
 
 if __name__ == "__main__":
-    print("⚡ سورس كومن يبدأ بالتحميل التلقائي...")
-    load_plugins()
-    client.start(bot_token=BOT_TOKEN)
-    client.run_until_disconnected()
+    asyncio.run(start_userbot())
