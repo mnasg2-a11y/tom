@@ -1,69 +1,38 @@
 import os
 import sys
 import subprocess
-import asyncio
+
+# حل مشكلة timezone
+os.environ['TZ'] = 'Asia/Riyadh'
+
+print("⏳ تـحـضـيـر الـبـيـئـة لـ Termux...")
+
+# تأكد من تثبيت pytz لحل مشكلة timezone
+try:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pytz"])
+    print("✅ تـم تـثـبيـت pytz")
+except:
+    print("⚠️ pytz مـثـبـت مـسـبـقـاً")
 
 # =========================================================
-# 📦 المرحلة 1: تثبيت المكتبات بأمان
+# 🔴 🔴 🔴 ضع توكن البوت الصحيح هنا 🔴 🔴 🔴
+BOT_TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU"  # من @BotFather
 # =========================================================
-def setup_environment():
-    print("⏳ جـارِ تـهيـئـة الـبـيـئـة...")
-    libraries = ["python-telegram-bot", "telethon", "aiohttp", "requests"]
-    for lib in libraries:
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
-            print(f"✅ تـم تـثـبيـت {lib}")
-        except:
-            print(f"⚠️ خـطـأ فـي تـثـبيـت {lib}")
-    
-    print("✅ الـتـهيـئـة اكـتـمـلـت.")
 
-setup_environment()
-
-# =========================================================
-# 🧠 المرحلة 2: ذكاء اصطناعي يعمل
-# =========================================================
-ai_code = '''
-import google.generativeai as genai
-
-class GeminiAI:
-    def __init__(self, api_key=None):
-        if api_key:
-            genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
-    
-    def chat(self, text):
-        try:
-            response = self.model.generate_content(text)
-            return response.text if response.text else "⚠️ لـم أحـصـل عـلـى رد"
-        except Exception as e:
-            return f"⚠️ خـطـأ: {str(e)}"
-
-# إنشاء نسخة افتراضية
-ai = GeminiAI()
-'''
-
-with open("ai_module.py", "w", encoding="utf-8") as f:
-    f.write(ai_code)
-
-# =========================================================
-# 📲 المرحلة 3: بوت التنصيب المعدّل
-# =========================================================
+# استيراد المكتبات بعد التأكد
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
-# 🔴 استبدل هذا بالتوكين الصحيح من BotFather
-BOT_TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU"  # مثال: "1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ"
 API_ID, API_HASH, SESSION, SOURCE_TOKEN = range(4)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 **أهـلاً! نـظـام التـنـصـيب جـاهـز**\n"
-        "أرسـل /install لـبـدء إعـداد الـسـورس"
+        "🚀 **نـظـام تـنـصـيب Common جـاهـز**\n"
+        "اكـتـب /install لـبـدء الـتـنـصـيب"
     )
 
 async def install_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("➡️ **أرسـل الـ API_ID:**")
+    await update.message.reply_text("📱 أرسـل الـ API_ID:")
     return API_ID
 
 async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -84,25 +53,32 @@ async def get_sess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def finalize_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     token = update.message.text.strip()
     
-    # حفظ البيانات في ملف
+    # حفظ البيانات
     with open(".env", "w") as f:
         f.write(f"API_ID={context.user_data['id']}\n")
         f.write(f"API_HASH={context.user_data['hash']}\n")
         f.write(f"STRING_SESSION={context.user_data['sess']}\n")
         f.write(f"BOT_TOKEN={token}\n")
     
-    await update.message.reply_text("🚀 **جـاري تـشـغـيـل الـسـورس...**")
+    await update.message.reply_text("⚡ جـاري تـشـغـيـل الـسـورس...")
     
-    # تشغيل الملف الرئيسي
+    # تشغيل main.py
     try:
         subprocess.Popen([sys.executable, "main.py"])
-        await update.message.reply_text("✅ **تـم تـنـصـيب الـسـورس بـنـجـاح!**")
-    except:
-        await update.message.reply_text("⚠️ **خـطـأ فـي تـشـغـيـل main.py**")
+        await update.message.reply_text("🎉 **تـم تـنـصـيب Common بـنـجـاح!**")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ خـطـأ: {str(e)}")
     
     return ConversationHandler.END
 
 def main():
+    if BOT_TOKEN == "ضع_التوكن_الجديد_هنا":
+        print("❌ **يجب وضع توكن البوت أولاً!**")
+        print("🔹 اذهب إلى @BotFather")
+        print("🔹 أنشئ بوت جديد")
+        print("🔹 ضع التوكن في السطر 19")
+        return
+    
     try:
         app = Application.builder().token(BOT_TOKEN).build()
         
@@ -120,11 +96,12 @@ def main():
         app.add_handler(CommandHandler("start", start))
         app.add_handler(conv)
         
-        print("🤖 البوت يعمل الآن...")
+        print("🤖 البوت يعمل...")
+        print(f"🔗 رابط البوت: https://t.me/{BOT_TOKEN.split(':')[0]}_bot")
         app.run_polling()
         
     except Exception as e:
-        print(f"❌ خطأ في تشغيل البوت: {e}")
+        print(f"❌ خطأ: {e}")
 
 if __name__ == "__main__":
     main()
