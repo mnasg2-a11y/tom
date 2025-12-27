@@ -13,7 +13,7 @@ BOT_TOKEN = '8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU'
 ADMIN_ID = 7259620384  # آيديك الخاص
 
 # استيراد نظام الشركاء من ملفك الأساسي
-from التعديل_من_جديد import AdvancedReferralSystem
+from  import AdvancedReferralSystem
 
 # تهيئة البوت وقاعدة البيانات
 manager = TelegramClient('ManagerBot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
