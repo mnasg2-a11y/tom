@@ -72,7 +72,11 @@ async def universal_downloader(event, url, is_audio=False, is_search=False):
         file_path, info = await asyncio.to_thread(start)
         await event.edit("📤 **تـم الـتـحـمـيـل! جـارِ الـرفـع الـآن...**")
         
-        await client.send_file(event.chat_id, file_path, caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**", video=True, supports_streaming=True)
+        if not is_audio:
+            await client.send_video(event.chat_id, file_path, caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**", supports_streaming=True)
+        else:
+            await client.send_file(event.chat_id, file_path, caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**")
+            
         await event.delete()
         if os.path.exists(file_path): os.remove(file_path)
     except Exception as e:
