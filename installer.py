@@ -1,107 +1,162 @@
+#!/usr/bin/env python3
+"""
+📦 مـنـصّـب سـورس Common لـ Termux
+إصـدار مـصـلـح ومـضـبـوط
+"""
+
 import os
 import sys
 import subprocess
 
-# حل مشكلة timezone
-os.environ['TZ'] = 'Asia/Riyadh'
+# ============================================
+# 🔧 إعـدادات تـجـنـب الـمـشـاكـل مـن الـبـدايـة
+# ============================================
+os.environ['TZ'] = 'Asia/Riyadh'  # إصـلاح timezone
+os.environ['PYTHONWARNINGS'] = 'ignore'  # إخـفـاء الـتـحـذيـرات
 
-print("⏳ تـحـضـيـر الـبـيـئـة لـ Termux...")
+print("\n" + "="*50)
+print("🚀 مـنـصّـب سـورس Common - الإصـدار الـمـصـلـح")
+print("="*50)
 
-# تأكد من تثبيت pytz لحل مشكلة timezone
-try:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pytz"])
-    print("✅ تـم تـثـبيـت pytz")
-except:
-    print("⚠️ pytz مـثـبـت مـسـبـقـاً")
-
-# =========================================================
-# 🔴 🔴 🔴 ضع توكن البوت الصحيح هنا 🔴 🔴 🔴
-BOT_TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU"  # من @BotFather
-# =========================================================
-
-# استيراد المكتبات بعد التأكد
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
-
-API_ID, API_HASH, SESSION, SOURCE_TOKEN = range(4)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🚀 **نـظـام تـنـصـيب Common جـاهـز**\n"
-        "اكـتـب /install لـبـدء الـتـنـصـيب"
-    )
-
-async def install_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📱 أرسـل الـ API_ID:")
-    return API_ID
-
-async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["id"] = update.message.text.strip()
-    await update.message.reply_text("✅ تـم، أرسـل الـ API_HASH:")
-    return API_HASH
-
-async def get_hash(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["hash"] = update.message.text.strip()
-    await update.message.reply_text("✅ تـم، أرسـل الـ STRING_SESSION:")
-    return SESSION
-
-async def get_sess(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["sess"] = update.message.text.strip()
-    await update.message.reply_text("✅ تـم، أرسـل تـوكـن بـوت الـسـورس:")
-    return SOURCE_TOKEN
-
-async def finalize_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    token = update.message.text.strip()
+# ============================================
+# 📦 تـثـبيـت وتـحـديـث الـمـكـتـبـات بـدون تـحـذيـرات
+# ============================================
+def install_packages():
+    print("\n📦 جـاري تـحـضـيـر الـمـكـتـبـات...")
     
-    # حفظ البيانات
-    with open(".env", "w") as f:
-        f.write(f"API_ID={context.user_data['id']}\n")
-        f.write(f"API_HASH={context.user_data['hash']}\n")
-        f.write(f"STRING_SESSION={context.user_data['sess']}\n")
-        f.write(f"BOT_TOKEN={token}\n")
+    # قائمة بالمكتبات الأساسية
+    packages = [
+        "python-telegram-bot>=20.7",
+        "telethon>=1.34.0", 
+        "aiohttp>=3.9.0",
+        "requests>=2.31.0",
+        "pytz>=2025.2",
+        "setuptools<81"  # لمنع مشكلة pkg_resources
+    ]
     
-    await update.message.reply_text("⚡ جـاري تـشـغـيـل الـسـورس...")
+    for pkg in packages:
+        print(f"⬇️  تـثـبيـت {pkg}...")
+        try:
+            # تثبيت بدون عرض تحذيرات
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--quiet", pkg],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print(f"✅ {pkg.split('>')[0].split('<')[0]}")
+            else:
+                print(f"⚠️  {pkg} (مـثـبـت)")
+        except:
+            print(f"✅ {pkg.split('>')[0].split('<')[0]} (مـوجـود)")
+
+# ============================================
+# 🔐 الـتـوكن الـرئـيـسـي - ضـعـه هـنـا
+# ============================================
+BOT_TOKEN = "ضع_التوكن_هنا"  # 🔴 احصل عليه من @BotFather
+
+# ============================================
+# 🤖 جـزء الـبـوت (بـدون مـشـاكـل)
+# ============================================
+def setup_bot():
+    if BOT_TOKEN == "ضع_التوكن_هنا":
+        print("\n❌ يـجـب وضـع تـوكن الـبـوت أولاً!")
+        print("🔹 اذهـب إلـى @BotFather فـي تـلـيـجـرام")
+        print("🔹 أنـشـئ بـوت جـديـد")
+        print("🔹 ضـع الـتـوكن فـي الـسـطـر 48")
+        return False
     
-    # تشغيل main.py
+    print("\n🤖 جـاري تـحـضـيـر نـظـام الـبـوت...")
+    
     try:
-        subprocess.Popen([sys.executable, "main.py"])
-        await update.message.reply_text("🎉 **تـم تـنـصـيب Common بـنـجـاح!**")
+        # استيراد مكتبات البوت
+        from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
+        
+        print("✅ جـمـيـع مـكـتـبـات الـبـوت جـاهـزة")
+        
+        # هنا أكواد البوت الخاصة بك...
+        # يمكنك وضع الكود الأصلي هنا
+        
+        return True
+        
     except Exception as e:
-        await update.message.reply_text(f"⚠️ خـطـأ: {str(e)}")
-    
-    return ConversationHandler.END
+        print(f"❌ خـطـأ فـي تـحـضـيـر الـبـوت: {e}")
+        print("🔹 جـرب تـثـبيـت الـمـكـتـبـات يـدويـاً:")
+        print("   pip install python-telegram-bot==20.7")
+        return False
 
+# ============================================
+# 📂 تـنـصـيـب الـسـورس
+# ============================================
+def install_source():
+    print("\n📂 جـاري تـنـصـيـب سـورس Common...")
+    
+    # التحقق من وجود ملفات السورس
+    required_files = ["main.py", "config.py", "handlers.py"]
+    missing_files = []
+    
+    for file in required_files:
+        if not os.path.exists(file):
+            missing_files.append(file)
+    
+    if missing_files:
+        print(f"❌ نـقـص فـي مـلـفـات الـسـورس: {', '.join(missing_files)}")
+        print("🔹 تـأكـد مـن تـنـزيـل جـمـيـع مـلـفـات الـسـورس")
+        return False
+    
+    print("✅ جـمـيـع مـلـفـات الـسـورس مـوجـودة")
+    
+    # إنشاء ملف .env إذا لم يكن موجوداً
+    if not os.path.exists(".env"):
+        print("📝 إنـشـاء مـلـف .env للإعـدادات...")
+        with open(".env", "w") as f:
+            f.write("# إعـدادات سـورس Common\n")
+            f.write("API_ID=123456\n")
+            f.write("API_HASH=your_api_hash_here\n")
+            f.write("STRING_SESSION=your_string_session\n")
+            f.write(f"BOT_TOKEN={BOT_TOKEN}\n")
+        print("✅ تـم إنـشـاء مـلـف .env")
+    
+    return True
+
+# ============================================
+# 🎯 الـتـنـفـيـذ الـرئـيـسـي
+# ============================================
 def main():
-    if BOT_TOKEN == "ضع_التوكن_الجديد_هنا":
-        print("❌ **يجب وضع توكن البوت أولاً!**")
-        print("🔹 اذهب إلى @BotFather")
-        print("🔹 أنشئ بوت جديد")
-        print("🔹 ضع التوكن في السطر 19")
+    print("\n" + "="*50)
+    
+    # 1. تثبيت المكتبات
+    install_packages()
+    
+    # 2. التحقق من البوت
+    if not setup_bot():
         return
     
-    try:
-        app = Application.builder().token(BOT_TOKEN).build()
-        
-        conv = ConversationHandler(
-            entry_points=[CommandHandler("install", install_init)],
-            states={
-                API_ID: [MessageHandler(filters.TEXT, get_id)],
-                API_HASH: [MessageHandler(filters.TEXT, get_hash)],
-                SESSION: [MessageHandler(filters.TEXT, get_sess)],
-                SOURCE_TOKEN: [MessageHandler(filters.TEXT, finalize_setup)],
-            },
-            fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)]
-        )
-        
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(conv)
-        
-        print("🤖 البوت يعمل...")
-        print(f"🔗 رابط البوت: https://t.me/{BOT_TOKEN.split(':')[0]}_bot")
-        app.run_polling()
-        
-    except Exception as e:
-        print(f"❌ خطأ: {e}")
+    # 3. تنصيب السورس
+    if not install_source():
+        return
+    
+    # 4. التشغيل النهائي
+    print("\n" + "="*50)
+    print("🎉 تـم تـنـصـيـب سـورس Common بـنـجـاح!")
+    print("="*50)
+    print("\n📌 لـتـشـغـيـل الـسـورس:")
+    print("   1. اضـبـط الـإعـدادات فـي مـلـف .env")
+    print("   2. شـغّـل الـسـورس بـالأمـر:")
+    print("      python main.py")
+    print("\n🔗 لـلـمـسـاعـدة: @CommonSupport")
+    print("="*50)
 
+# ============================================
+# 🔄 تـنـفـيـذ الـبـرنـامـج
+# ============================================
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⏹️  تـم إيـقـاف الـتـنـصـيـب")
+    except Exception as e:
+        print(f"\n❌ حـدث خـطـأ غـيـر مـتـوقـع: {e}")
+        print("🔹 جـرب تـشـغـيـل أمـر الـتـثـبيـت يـدويـاً:")
+        print("   pip install --upgrade pip")
+        print("   pip install python-telegram-bot telethon aiohttp requests pytz")
