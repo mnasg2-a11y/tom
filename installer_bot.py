@@ -10,7 +10,7 @@ BOT_TOKEN = '8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU'
 ADMIN_ID = 7259620384  # آيديك يا حسين
 
 # استيراد محرك الذكاء الاصطناعي المستقر
-from الذكاء_الاصطناعي_مال_سورس_كومن import GeminiAI
+from ai_engine import GeminiAI
 ai = GeminiAI()
 
 # تشغيل البوت المدير
