@@ -3,29 +3,35 @@ import asyncio
 import yt_dlp
 import time
 import certifi
-from telethon import events
+from telethon import events, types
 from __main__ import client #
 
-# إعداد شهادات الأمان لمنع خطأ Errno 7
 os.environ['SSL_CERT_FILE'] = certifi.where()
 
-SECTION_NAME = "🚀 مـحـرك الـتـحـمـيـل الـعـالـمـي"
-COMMANDS = "• `.ميديا` : لـوحـة الـتـحـمـيـل الـشـامـلـة"
-
 def get_pro_opts(is_audio=False, hook=None):
-    return {
-        'format': 'bestaudio/best' if is_audio else 'bestvideo+bestaudio/best',
-        'outtmpl': 'downloads/%(title)s.%(ext)s',
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        'quiet': True,
-        'no_warnings': True,
-        'ignoreerrors': True,
-        'source_address': '0.0.0.0',
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'referer': 'https://www.google.com/',
-        'progress_hooks': [hook] if hook else [],
-    }
+    # **هنا التعديل المهم**: أجبر تحميل mp4 فقط
+    if not is_audio:
+        return {
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'merge_output_format': 'mp4',  # هذا مهم
+            'nocheckcertificate': True,
+            'geo_bypass': True,
+            'quiet': True,
+        }
+    else:
+        return {
+            'format': 'bestaudio/best',
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'nocheckcertificate': True,
+            'geo_bypass': True,
+            'quiet': True,
+        }
 
 def progress_bar(current, total):
     percentage = (current * 100) / total
@@ -42,17 +48,17 @@ def pro_hook(d, event, loop, last_upd):
             if total > 0:
                 bar = progress_bar(downloaded, total)
                 speed = d.get('_speed_str', 'N/A')
-                loop.create_task(event.edit(f"⏳ **جـارِ الـتـحـمـيـل الـحـقـيـقـي...**\n\n{bar}\n🚀 **الـسـرعـة:** `{speed}`"))
+                loop.create_task(event.edit(f"⏳ **جـاري التحميل...**\n\n{bar}\n🚀 **السرعة:** `{speed}`"))
                 last_upd[0] = curr
 
 async def universal_downloader(event, url, is_audio=False, is_search=False):
-    await event.edit("📡 **جـارِ فـحـص الـرابـط وتـجـاوز الـقـيـود...**")
+    await event.edit("📡 **جاري فحص الرابط...**")
     last_upd = [time.time()]
     loop = asyncio.get_event_loop()
     
     if "spotify.com" in url:
         is_search = True
-        await event.edit("🎧 **رابـط Spotify.. جـارِ الـبـحـث فـي YouTube Music...**")
+        await event.edit("🎧 **رابط Spotify.. جاري البحث...**")
 
     try:
         def start():
@@ -62,53 +68,72 @@ async def universal_downloader(event, url, is_audio=False, is_search=False):
                 info = ydl.extract_info(target, download=True)
                 if 'entries' in info: info = info['entries'][0]
                 path = ydl.prepare_filename(info)
-                if is_audio:
-                    new_path = path.rsplit(".", 1)[0] + ".mp3"
-                    if os.path.exists(path): os.rename(path, new_path)
-                    path = new_path
+                # تأكد من أن الفيديو بصيغة mp4
+                if not is_audio:
+                    if not path.endswith('.mp4'):
+                        new_path = path.rsplit(".", 1)[0] + ".mp4"
+                        os.rename(path, new_path)
+                        path = new_path
                 return path, info
 
         file_path, info = await asyncio.to_thread(start)
-        await event.edit("📤 **تـم الـتـحـمـيـل! جـارِ الـرفـع الـآن...**")
+        await event.edit("📤 **تم التحميل! جاري الرفع...**")
         
-        # **هذا هو التعديل الأساسي**
         if not is_audio:
-            # للفيديو: حاول إرساله كملف فيديو
+            # **إرسال الفيديو مع وصف فيديو صريح**
             await client.send_file(
                 event.chat_id, 
                 file_path, 
-                caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**",
-                video_note=False,
+                caption=f"✅ **{info.get('title', 'فيديو')[:50]}**",
                 supports_streaming=True,
-                force_document=False,  # هذا مهم - يجعل التليجرام لا يعامله كمستند
-                allow_cache=False,
-                attributes=None
+                attributes=[
+                    types.DocumentAttributeVideo(
+                        duration=info.get('duration', 0),
+                        w=info.get('width', 1280),
+                        h=info.get('height', 720),
+                        supports_streaming=True
+                    )
+                ]
             )
         else:
-            # للصوت: أرسله كمستند عادي
             await client.send_file(
                 event.chat_id, 
                 file_path, 
-                caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**"
+                caption=f"✅ **{info.get('title', 'صوت')[:50]}**"
             )
         
         await event.delete()
-        if os.path.exists(file_path): os.remove(file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
     except Exception as e:
-        await event.edit(f"❌ **خـطأ فـي الـمـحـرك:**\n`{str(e)[:150]}`")
+        await event.edit(f"❌ **خطأ:**\n`{str(e)[:100]}`")
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.فيديو (.*)'))
-async def v_d(event): await universal_downloader(event, event.pattern_match.group(1), False)
+async def v_d(event): 
+    await universal_downloader(event, event.pattern_match.group(1), False)
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.صوت (.*)'))
-async def a_d(event): await universal_downloader(event, event.pattern_match.group(1), True)
+async def a_d(event): 
+    await universal_downloader(event, event.pattern_match.group(1), True)
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_فيد (.*)'))
-async def s_v(event): await universal_downloader(event, event.pattern_match.group(1), False, True)
+async def s_v(event): 
+    await universal_downloader(event, event.pattern_match.group(1), False, True)
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.بحث_صوت (.*)'))
-async def s_a(event): await universal_downloader(event, event.pattern_match.group(1), True, True)
+async def s_a(event): 
+    await universal_downloader(event, event.pattern_match.group(1), True, True)
 
 @client.on(events.NewMessage(outgoing=True, pattern=r'\.ميديا'))
 async def m_m(event):
-    await event.edit("╔════════════════════╗\n      **🎬 مـركـز تـحـمـيـل كـومـن Pro**\n╚════════════════════╝\n\n**الـتـحـمـيـل (YT, Spotify, TikTok, FB):**\n• `.فيديو` + الرابط\n• `.صوت` + الرابط\n\n**الـبـحـث والـتـحـمـيـل:**\n• `.بحث_فيد` + الاسم\n• `.بحث_صوت` + الاسم")
+    await event.edit("""╔════════════════════╗
+      🎬 **مركز تحميل كومن Pro**
+╚════════════════════╝
+
+**التحميل (YT, Spotify, TikTok, FB):**
+• `.فيديو` + الرابط
+• `.صوت` + الرابط
+
+**البحث والتحميل:**
+• `.بحث_فيد` + الاسم
+• `.بحث_صوت` + الاسم""")
