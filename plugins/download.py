@@ -21,7 +21,7 @@ def get_pro_opts(is_audio=False, hook=None):
         'quiet': True,
         'no_warnings': True,
         'ignoreerrors': True,
-        'source_address': '0.0.0.0', # حل مشكلة No address associated
+        'source_address': '0.0.0.0',
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'referer': 'https://www.google.com/',
         'progress_hooks': [hook] if hook else [],
@@ -36,7 +36,7 @@ def progress_bar(current, total):
 def pro_hook(d, event, loop, last_upd):
     if d['status'] == 'downloading':
         curr = time.time()
-        if curr - last_upd[0] > 2.5: # تحديث كل 2.5 ثانية لتجنب الحظر
+        if curr - last_upd[0] > 2.5:
             downloaded = d.get('downloaded_bytes', 0)
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
             if total > 0:
@@ -50,7 +50,6 @@ async def universal_downloader(event, url, is_audio=False, is_search=False):
     last_upd = [time.time()]
     loop = asyncio.get_event_loop()
     
-    # دعم Spotify عبر البحث التلقائي
     if "spotify.com" in url:
         is_search = True
         await event.edit("🎧 **رابـط Spotify.. جـارِ الـبـحـث فـي YouTube Music...**")
@@ -72,13 +71,26 @@ async def universal_downloader(event, url, is_audio=False, is_search=False):
         file_path, info = await asyncio.to_thread(start)
         await event.edit("📤 **تـم الـتـحـمـيـل! جـارِ الـرفـع الـآن...**")
         
-        # إرسال الملف
-        await client.send_file(
-            event.chat_id, 
-            file_path, 
-            caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**",
-            supports_streaming=True  # هذا هو التعديل الوحيد
-        )
+        # **هذا هو التعديل الأساسي**
+        if not is_audio:
+            # للفيديو: حاول إرساله كملف فيديو
+            await client.send_file(
+                event.chat_id, 
+                file_path, 
+                caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**",
+                video_note=False,
+                supports_streaming=True,
+                force_document=False,  # هذا مهم - يجعل التليجرام لا يعامله كمستند
+                allow_cache=False,
+                attributes=None
+            )
+        else:
+            # للصوت: أرسله كمستند عادي
+            await client.send_file(
+                event.chat_id, 
+                file_path, 
+                caption=f"✅ **تـم الـتـحـمـيـل بـنـجـاح**\n📌 `{info.get('title')[:50]}`\n💎 **S O U R C E  C O M M O N**"
+            )
         
         await event.delete()
         if os.path.exists(file_path): os.remove(file_path)
