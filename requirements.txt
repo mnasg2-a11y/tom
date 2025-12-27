@@ -22,3 +22,4 @@ certifi
 aiohttp
 edge-tts
 aiohttp
+pytz
