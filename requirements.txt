@@ -1,3 +1,5 @@
+sqlite3
+asyncio
 telethon
 python-dotenv
 python-dotenv
