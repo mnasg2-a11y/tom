@@ -21,3 +21,4 @@ yt-dlp
 certifi
 aiohttp
 edge-tts
+aiohttp
