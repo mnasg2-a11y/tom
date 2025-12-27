@@ -1,198 +1,248 @@
-# main.py
-import os, sys, asyncio, importlib, time
-import socks  # إضافة مكتبة البروكسي
-from telethon import TelegramClient, events
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+🔥 سورس كومن Pro - النسخة الأساسية
+✅ جلسة دائمة - بدون أوامر - استمرارية كاملة
+"""
+
+import os
+import sys
+import asyncio
+import time
+import signal
+from pathlib import Path
+
+from telethon import TelegramClient
 from telethon.sessions import StringSession
-from dotenv import load_dotenv
+from telethon.errors import SessionPasswordNeededError
 
-# الإعدادات الأساسية
-API_ID = 22439859 
+# ==================== الإعدادات الأساسية ====================
+API_ID = 22439859
 API_HASH = '312858aa733a7bfacf54eede0c275db4'
-SESSION_FILE = "session1.txt" 
+SESSION_FILE = "comun_session.txt"
 
-# --- 🌐 إعدادات البروكسي (Proxy Settings) ---
-# قم بتعديل البيانات أدناه لتناسب البروكسي الخاص بك
-USE_PROXY = True  # اجعلها False لتعطيل البروكسي
-PROX_ADDR = '127.0.0.1' # عنوان البروكسي (IP)
-PROX_PORT = 1080        # المنفذ (Port)
-PROX_USER = None        # اسم المستخدم (إن وجد)
-PROX_PASS = None        # كلمة المرور (إن وجد)
-
-if USE_PROXY:
-    proxy = (socks.SOCKS5, PROX_ADDR, PROX_PORT, True, PROX_USER, PROX_PASS)
-else:
-    proxy = None
-
-# 1. تحميل الجلسة من ملف نصي
+# ==================== إدارة الجلسة ====================
 def load_session():
-    if os.path.exists(SESSION_FILE):
-        try:
+    """تحميل الجلسة من الملف"""
+    try:
+        if os.path.exists(SESSION_FILE):
             with open(SESSION_FILE, "r", encoding="utf-8") as f:
                 session_str = f.read().strip()
-            if session_str:
-                return session_str
-        except:
-            pass
+                if session_str and len(session_str) > 50:
+                    print(f"✅ تم تحميل الجلسة من {SESSION_FILE}")
+                    return session_str
+    except Exception as e:
+        print(f"❌ خطأ في تحميل الجلسة: {e}")
     return None
 
-# 2. حفظ الجلسة في ملف نصي
-def save_session(session_str):
-    with open(SESSION_FILE, "w", encoding="utf-8") as f:
-        f.write(session_str)
+def save_session(session_str: str):
+    """حفظ الجلسة في الملف"""
+    try:
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            f.write(session_str)
+        print("✅ تم حفظ الجلسة")
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في حفظ الجلسة: {e}")
+        return False
 
-# 3. إنشاء/استرجاع الجلسة
+async def create_new_session():
+    """إنشاء جلسة جديدة مرة واحدة فقط"""
+    print("\n" + "="*50)
+    print("🔐 **المرة الأولى - تسجيل الدخول**")
+    print("="*50)
+    print("⚠️ هذه العملية مرة واحدة فقط")
+    print("📱 ستحتاج إلى إدخال رقم الهاتف والكود")
+    print("="*50)
+    
+    try:
+        client_temp = TelegramClient(StringSession(), API_ID, API_HASH)
+        await client_temp.start()
+        
+        # التحقق إذا كان الحساب محمي بكلمة سر
+        try:
+            me = await client_temp.get_me()
+        except SessionPasswordNeededError:
+            print("🔒 الحساب محمي بكلمة سر")
+            password = input("🔑 أدخل كلمة السر: ")
+            await client_temp.start(password=password)
+            me = await client_temp.get_me()
+        
+        session_str = client_temp.session.save()
+        
+        if save_session(session_str):
+            print(f"\n✅ **تم التسجيل بنجاح!**")
+            print(f"👤 **الاسم:** {me.first_name}")
+            print(f"🆔 **الايدي:** {me.id}")
+            print(f"📞 **المستخدم:** @{me.username if me.username else 'لا يوجد'}")
+            print("💾 **تم حفظ الجلسة للأبد**")
+            print("="*50)
+            print("🚀 **لن تحتاج لإدخال الرقم مرة أخرى**")
+            print("="*50)
+            
+            # إرسال رسالة تأكيد
+            await client_temp.send_message(
+                "me",
+                f"✅ **تم حفظ الجلسة بنجاح!**\n"
+                f"👤 **الحساب:** {me.first_name}\n"
+                f"📅 **التاريخ:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"🔐 **لن تحتاج لإدخال الرقم مرة أخرى**"
+            )
+            
+            await client_temp.disconnect()
+            return session_str
+        
+        await client_temp.disconnect()
+        return None
+        
+    except KeyboardInterrupt:
+        print("\n❌ تم إلغاء العملية")
+        return None
+    except Exception as e:
+        print(f"❌ خطأ في إنشاء الجلسة: {e}")
+        return None
+
+# ==================== العميل الرئيسي ====================
 SESSION_STR = load_session()
 
 if not SESSION_STR:
-    print("🛠 إنشاء جلسة جديدة عبر البروكسي...")
-    print("⚠️ ستحتاج إلى إدخال الرقم مرة واحدة فقط")
-    print("=" * 50)
-    
-    async def create_session():
-        # إضافة البروكسي وبارامترات الثبات للجلسة الجديدة
-        client_temp = TelegramClient(
-            StringSession(), 
-            API_ID, 
-            API_HASH, 
-            proxy=proxy,
-            connection_retries=10, 
-            timeout=30
-        )
-        await client_temp.start()
-        session_str = client_temp.session.save()
-        save_session(session_str)
-        await client_temp.disconnect()
-        return session_str
-    
-    SESSION_STR = asyncio.run(create_session())
-    print("✅ تم حفظ الجلسة بنجاح!")
-    print("=" * 50)
+    SESSION_STR = asyncio.run(create_new_session())
+    if not SESSION_STR:
+        print("❌ فشل في إنشاء الجلسة!")
+        sys.exit(1)
 
-# إنشاء العميل الأساسي مع البروكسي وإعدادات منع الـ Timeout
-client = TelegramClient(
-    StringSession(SESSION_STR), 
-    API_ID, 
-    API_HASH, 
-    proxy=proxy,
-    connection_retries=10, 
-    timeout=30
-)
+# إنشاء العميل
+client = TelegramClient(StringSession(SESSION_STR), API_ID, API_HASH)
 
-PLUGINS_HELP = {}
-
-def load_plugins():
-    """تحميل وتحديث جميع الإضافات"""
-    PLUGINS_HELP.clear()
-    if not os.path.exists("plugins"): 
-        os.makedirs("plugins")
-    
-    if not os.listdir("plugins"):
-        create_basic_plugins()
-    
-    sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-    
-    for filename in os.listdir("plugins"):
-        if filename.endswith(".py") and not filename.startswith("__"):
-            module_name = f"plugins.{filename[:-3]}"
-            try:
-                if module_name in sys.modules:
-                    module = sys.modules[module_name]
-                    module = importlib.reload(module)
-                else:
-                    module = importlib.import_module(module_name)
-                
-                if hasattr(module, "SECTION_NAME") and hasattr(module, "COMMANDS"):
-                    PLUGINS_HELP[module.SECTION_NAME] = module.COMMANDS
-                    
-            except Exception as e: 
-                print(f"⚠️ خطأ في {module_name}: {str(e)[:50]}")
-
-def create_basic_plugins():
-    """إنشاء إضافات أساسية إذا لم تكن موجودة"""
-    basic_plugins = {
-        "ping.py": '''# ping.py
-SECTION_NAME = "🔄 الاختبار"
-COMMANDS = "`.بينج` - اختبار سرعة البوت"
-@client.on(events.NewMessage(outgoing=True, pattern=r'\\.بينج'))
-async def ping_handler(event):
-    start = time.time()
-    msg = await event.edit("**⏳ جاري الاختبار...**")
-    end = time.time()
-    await msg.edit(f"**🏓 البينج:** `{round((end - start) * 1000, 2)}ms`")
-''',
-        "info.py": '''# info.py
-SECTION_NAME = "ℹ️ المعلومات"
-COMMANDS = "`.معلوماتي` - عرض معلومات حسابك\\n`.ايدي` - عرض ايدي الدردشة"
-@client.on(events.NewMessage(outgoing=True, pattern=r'\\.معلوماتي'))
-async def myinfo_handler(event):
-    user = await client.get_me()
-    await event.edit(f"**👤 الاسم:** {user.first_name}\\n**🆔 الايدي:** `{user.id}`")
-'''
-    }
-    
-    for filename, content in basic_plugins.items():
-        with open(f"plugins/{filename}", "w", encoding="utf-8") as f:
-            f.write(content)
-
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.الاوامر'))
-async def help_menu(event):
-    menu = "🚀 **سـورس كـومـن Pro - الأوامر**\n"
-    menu += "═" * 30 + "\n"
-    if not PLUGINS_HELP:
-        menu += "📭 لا توجد أوامر مثبتة حالياً\n"
-    else:
-        for sec, cmds in PLUGINS_HELP.items():
-            menu += f"\n**{sec}:**\n{cmds}\n"
-    menu += f"\n⏱ **الوقت:** {time.strftime('%H:%M:%S')}"
-    menu += f"\n📁 **عدد الإضافات:** {len(PLUGINS_HELP)}"
-    await event.edit(menu)
-
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.تحديث'))
-async def update_cmd(event):
-    try:
-        old_count = len(PLUGINS_HELP)
-        load_plugins()
-        new_count = len(PLUGINS_HELP)
-        await event.edit(f"**✅ تم التحديث بنجاح!**\n"
-                        f"**الإضافات:** {old_count} → {new_count}\n")
-    except Exception as e:
-        await event.edit(f"**❌ خطأ في التحديث:**\n`{str(e)[:100]}`")
-
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.الحالة'))
-async def status_cmd(event):
-    user = await client.get_me()
-    status_msg = (
-        f"**📊 حالة البوت:**\n"
-        f"**👤 المستخدم:** {user.first_name}\n"
-        f"**🆔 الايدي:** `{user.id}`\n"
-        f"**📁 الإضافات:** {len(PLUGINS_HELP)}\n"
-        f"**🔒 البروكسي:** {'✅ متصل' if USE_PROXY else '❌ معطل'}"
-    )
-    await event.edit(status_msg)
-
-async def start_bot():
+# ==================== وظائف البوت ====================
+async def check_connection():
+    """التحقق من الاتصال"""
     try:
         await client.connect()
-        if not await client.is_user_authorized():
-            print("❌ الجلسة غير صالحة...")
-            return
         
-        print("🔥 جاري بدء البوت عبر البروكسي...")
-        load_plugins()
-        await client.send_message("me", f"**✅ سورس كـومـن Pro يعمل الآن!**\n**الوضع:** {'بروكسي' if USE_PROXY else 'مباشر'}")
-        await client.run_until_disconnected()
+        if not await client.is_user_authorized():
+            print("❌ الجلسة منتهية الصلاحية!")
+            return False
+        
+        me = await client.get_me()
+        return me
         
     except Exception as e:
-        print(f"❌ خطأ في التشغيل: {e}")
-        await asyncio.sleep(10)
-        await start_bot()
+        print(f"❌ خطأ في الاتصال: {e}")
+        return False
 
-if __name__ == "__main__":
+async def send_startup_message():
+    """إرسال رسالة بدء التشغيل"""
+    try:
+        me = await client.get_me()
+        message = f"""
+✅ **البوت يعمل الآن!**
+👤 **الحساب:** {me.first_name}
+🆔 **الايدي:** {me.id}
+⏰ **الوقت:** {time.strftime('%Y-%m-%d %H:%M:%S')}
+🔥 **الجلسة دائمة ولا تحتاج لتسجيل**
+"""
+        await client.send_message("me", message)
+        return True
+    except:
+        return False
+
+async def keep_alive():
+    """الحفاظ على اتصال البوت نشطاً"""
+    print("🔄 جاري تشغيل البوت...")
+    
+    # التحقق من الاتصال
+    me = await check_connection()
+    if not me:
+        print("❌ فشل في الاتصال!")
+        return False
+    
+    print(f"✅ **اتصال ناجح:** {me.first_name}")
+    
+    # إرسال رسالة البدء
+    await send_startup_message()
+    
+    # حفظ الجلسة الحالية
+    save_session(SESSION_STR)
+    
+    print("\n" + "="*50)
+    print("🎯 **البوت يعمل بنجاح!**")
+    print("🔐 **الجلسة محفوظة ومستمرة**")
+    print("⚡ **لن ينقطع الاتصال أبداً**")
+    print("="*50)
+    print("\n📌 **المميزات:**")
+    print("• ✅ جلسة دائمة لا تنتهي")
+    print("• ✅ اتصال مستمر 24/7")
+    print("• ✅ لا حاجة لإعادة التسجيل")
+    print("• ✅ يعمل في الخلفية")
+    print("="*50)
+    
+    return True
+
+async def run_bot():
+    """تشغيل البوت الرئيسي"""
+    try:
+        # تشغيل البوت
+        success = await keep_alive()
+        if not success:
+            return False
+        
+        # تشغيل العميل بشكل دائم
+        await client.run_until_disconnected()
+        
+        return True
+        
+    except KeyboardInterrupt:
+        print("\n⏹ تم إيقاف البوت بواسطة المستخدم")
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في التشغيل: {e}")
+        return False
+    finally:
+        # حفظ الجلسة قبل الخروج
+        save_session(SESSION_STR)
+        print("💾 تم حفظ الجلسة")
+
+# ==================== تشغيل البوت ====================
+async def main():
+    """الدالة الرئيسية"""
     while True:
         try:
-            asyncio.run(start_bot())
+            print("\n" + "="*50)
+            print("🚀 بدء تشغيل سورس كومن Pro")
+            print("="*50)
+            
+            # تشغيل البوت
+            success = await run_bot()
+            
+            if success:
+                print("\n🔄 جاري إعادة التشغيل...")
+                await asyncio.sleep(5)  # انتظار 5 ثواني
+            else:
+                print("\n❌ فشل في التشغيل، إعادة المحاولة...")
+                await asyncio.sleep(10)  # انتظار 10 ثواني
+                
         except KeyboardInterrupt:
+            print("\n\n⏹ إيقاف نهائي للبوت")
             break
         except Exception as e:
-            time.sleep(5)
-            continue
+            print(f"\n⚠️ خطأ غير متوقع: {e}")
+            await asyncio.sleep(10)
+
+# ==================== نقطة الدخول ====================
+if __name__ == "__main__":
+    # معالجة إشارات الإيقاف
+    signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
+    
+    # تشغيل البوت
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n✅ تم إيقاف البوت")
+    except Exception as e:
+        print(f"❌ خطأ نهائي: {e}")
+    finally:
+        # التأكد من حفظ الجلسة
+        if 'SESSION_STR' in globals() and SESSION_STR:
+            save_session(SESSION_STR)
+        print("\n🔥 جلسة كومن Pro محفوظة للأبد!")
