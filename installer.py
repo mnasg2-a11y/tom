@@ -4,25 +4,25 @@ import subprocess
 import logging
 
 # =========================================================
-# 🛠 الخطوة 1: فحص وتثبيت المكتبات تلقائياً
+# 📦 المرحلة 1: الفحص والتثبيت الآلي للمكتبات
 # =========================================================
-def install_requirements():
-    print("⏳ جارِ فحص وتحديث المكتبات لضمان أفضل أداء...")
-    reqs = ["python-telegram-bot", "telethon", "aiohttp", "requests", "urllib3==1.26.15"]
-    for req in reqs:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", req])
-    print("✅ تم تجهيز البيئة البرمجية بنجاح.")
+def setup_environment():
+    print("⏳ جـارِ تـنـظـيـف وتـهـيـئـة الـبـيـئـة الـبـرمـجـيـة...")
+    libraries = ["python-telegram-bot", "telethon", "aiohttp", "requests", "urllib3==1.26.15"]
+    for lib in libraries:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
+    print("✅ تـم تـجـهـيـز الـمـكـتـبـات بـنـجـاح.")
 
-install_requirements()
+setup_environment()
 
-# الآن نستورد المكاتب بعد التأكد من تثبيتها
+# استيراد المكاتب بعد التأكد من صحتها
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
 # =========================================================
-# 🧠 الخطوة 2: إنشاء ملف الذكاء الاصطناعي (لحل مشكلة Pydroid)
+# 🧠 المرحلة 2: إصلاح ملف الذكاء (لحل مشكلة Pydroid)
 # =========================================================
-ai_code = """
+ai_fix = """
 import requests
 class GeminiAI:
     def __init__(self):
@@ -33,79 +33,73 @@ class GeminiAI:
         try:
             res = requests.post(self.api_url, json=payload, headers=self.headers, timeout=15)
             return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except: return "⚠️ المحرك مشغول."
+        except: return "⚠️ الـمـحـرك مـشـغـول حـالـيـاً."
 """
 with open("common_ai.py", "w", encoding="utf-8") as f:
-    f.write(ai_code)
+    f.write(ai_fix) # إنشاء الملف بالاسم الصحيح لتجنب ModuleNotFoundError
 
 # =========================================================
-# 📲 الخطوة 3: بوت التنصيب وجلب الأوامر
+# 📲 المرحلة 3: بوت التنصيب والاتصال
 # =========================================================
 
-# توكن بوت التنصيب الخاص بك
 BOT_TOKEN = "6729948368:8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU"
-# حالات المحادثة
-API_ID, API_HASH, SESSION, SOURCE_BOT_TOKEN = range(4)
-
-
+API_ID, API_HASH, SESSION, SOURCE_TOKEN = range(4)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 **أهلاً بك يا مبرمج حسين في نظام كومن الشامل!**\n\n"
-        "تم حل جميع مشاكل المكتبات والأسماء تلقائياً.\n"
-        "أرسل /install للبدء في تشغيل السورس."
+        "👋 **أهـلاً يـا حـسـيـن! الـنـظـام جـاهـز 100%.**\n"
+        "تـم حـل جـمـيـع مـشـاكـل الـاسـتـيـراد والـمـكـتـبـات تـلـقـائـيـاً.\n\n"
+        "أرسـل /install لـتـشـغـيـل الـسورس الـآن."
     )
 
-async def install_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("➡️ **ارسل الآن الـ API_ID الخاص بك:**")
+async def install_init(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("➡️ **ارسل الـ API_ID الـخاص بـك:**")
     return API_ID
 
-async def get_api_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["id"] = update.message.text.strip()
-    await update.message.reply_text("✅ تم الحفظ. ارسل الـ API_HASH:")
+    await update.message.reply_text("✅ تـم. ارسل الـ API_HASH:")
     return API_HASH
 
-async def get_api_hash(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def get_hash(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["hash"] = update.message.text.strip()
-    await update.message.reply_text("✅ تم الحفظ. ارسل الـ STRING_SESSION:")
+    await update.message.reply_text("✅ تـم. ارسل الـ STRING_SESSION:")
     return SESSION
 
-async def get_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def get_sess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["sess"] = update.message.text.strip()
-    await update.message.reply_text("✅ تم الحفظ. ارسل الآن توكن بوت السورس:")
-    return SOURCE_BOT_TOKEN
+    await update.message.reply_text("✅ تـم. ارسل تـوكـن بـوت الـسورس:")
+    return SOURCE_TOKEN
 
-async def finalize(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["token"] = update.message.text.strip()
-    
-    # كتابة الفارات في ملف .env
+async def finalize_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    token = update.message.text.strip()
+    # حـفـظ الـبـيـانـات فـي مـلـف الـتـهـيـئـة
     with open(".env", "w") as f:
         f.write(f"API_ID={context.user_data['id']}\nAPI_HASH={context.user_data['hash']}\n")
-        f.write(f"STRING_SESSION={context.user_data['sess']}\nBOT_TOKEN={context.user_data['token']}\n")
+        f.write(f"STRING_SESSION={context.user_data['sess']}\nBOT_TOKEN={token}\n")
     
-    await update.message.reply_text("🎉 **تم التجهيز! جاري تشغيل سورس كومن وجلب الأوامر...**")
+    await update.message.reply_text("🚀 **جـارِ تـشـغـيـل سـورس كـومـن وجـلـب جـمـيـع الـأوامـر...**")
     
-    # تشغيل السورس (main.py)
+    # تـشـغـيـل الـمـحـرك الـأسـاسـي
     subprocess.Popen([sys.executable, "main.py"])
-    await update.message.reply_text("✅ **السورس يعمل الآن! جرب كتابة .الاوامر في حسابك.**")
+    await update.message.reply_text("✅ **الـسـورس يـعـمـل الـآن! اكـتـب .الاوامر فـي حـسـابـك.**")
     return ConversationHandler.END
 
-# تشغيل محرك البوت
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
-        entry_points=[CommandHandler("install", install_start)],
+        entry_points=[CommandHandler("install", install_init)],
         states={
-            API_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_api_id)],
-            API_HASH: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_api_hash)],
-            SESSION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_session)],
-            SOURCE_BOT_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize)],
+            API_ID: [MessageHandler(filters.TEXT, get_id)],
+            API_HASH: [MessageHandler(filters.TEXT, get_hash)],
+            SESSION: [MessageHandler(filters.TEXT, get_sess)],
+            SOURCE_TOKEN: [MessageHandler(filters.TEXT, finalize_setup)],
         },
-        fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)],
+        fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)]
     )
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv)
-    print("🚀 المنظومة الشاملة تعمل الآن...")
+    print("🚀 مـنـظـومـة كـومـن تـعـمـل الـآن...")
     app.run_polling()
 
 if __name__ == "__main__":
