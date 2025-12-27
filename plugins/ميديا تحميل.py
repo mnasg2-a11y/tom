@@ -12,42 +12,25 @@ SECTION_NAME = "🚀 مـحـرك الـتـحـمـيـل الـعـالـمـ�
 COMMANDS = "• `.ميديا` : لـوحـة الـتـحـمـيـل الـشـامـلـة"
 
 def get_pro_opts(is_audio=False):
-    # **تسريع التحميل**: تحميل فقط الجودة الأساسية
-    if is_audio:
-        return {
-            'format': 'bestaudio[filesize<50M]',
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'nocheckcertificate': True,
-            'geo_bypass': True,
-            'quiet': True,
-            'no_warnings': True,
-            'ignoreerrors': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'extractaudio': True,
-            'audioformat': 'mp3',
-            'audioquality': '0',
-        }
-    else:
-        return {
-            'format': 'best[height<=720][filesize<100M]/best[height<=480]',  # تحميل سريع
-            'outtmpl': 'downloads/%(title)s.%(ext)s',
-            'nocheckcertificate': True,
-            'geo_bypass': True,
-            'quiet': True,
-            'no_warnings': True,
-            'ignoreerrors': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'concurrent_fragment_downloads': 5,  # تحميل متعدد
-            'external_downloader': 'aria2c',  # أسرع
-            'external_downloader_args': ['--max-connection-per-server=16', '--split=16'],
-        }
+    return {
+        'format': 'bestaudio/best' if is_audio else 'best[height<=720]',
+        'outtmpl': 'downloads/%(title)s.%(ext)s',
+        'nocheckcertificate': True,
+        'geo_bypass': True,
+        'quiet': True,
+        'no_warnings': True,
+        'ignoreerrors': True,
+        'source_address': '0.0.0.0',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'referer': 'https://www.google.com/',
+    }
 
 async def universal_downloader(event, url, is_audio=False, is_search=False):
-    await event.edit("⚡ **جاري التحميل بسرعة الصاروخ...**")
+    await event.edit("⚡ **جاري فحص الرابط...**")
     
     if "spotify.com" in url:
         is_search = True
-        await event.edit("🎧 **جاري البحث عن الموسيقى...**")
+        await event.edit("🎧 **جاري البحث...**")
 
     try:
         def start():
@@ -57,7 +40,7 @@ async def universal_downloader(event, url, is_audio=False, is_search=False):
                 if 'entries' in info: 
                     info = info['entries'][0]
                 path = ydl.prepare_filename(info)
-                if is_audio and not path.endswith('.mp3'):
+                if is_audio:
                     new_path = path.rsplit(".", 1)[0] + ".mp3"
                     if os.path.exists(path): 
                         os.rename(path, new_path)
@@ -67,13 +50,18 @@ async def universal_downloader(event, url, is_audio=False, is_search=False):
         file_path, info = await asyncio.to_thread(start)
         await event.edit("🚀 **تم التحميل! جاري الرفع...**")
         
+        # الحصول على العنوان بشكل آمن
+        title = info.get('title', 'ميديا')
+        if title and len(title) > 40:
+            title = title[:40]
+        
         # **الحل النهائي**: إرسال كفيديو مباشر
         await client.send_file(
             event.chat_id, 
             file_path, 
-            caption=f"✅ **{info.get('title', 'ميديا')[:40]}**\n💎 **S O U R C E  C O M M O N**",
-            video=not is_audio,  # هذا يحدد إذا كان فيديو أو لا
-            supports_streaming=True if not is_audio else False
+            caption=f"✅ **{title}**\n💎 **S O U R C E  C O M M O N**",
+            video=not is_audio,  # هذا السطر هو التعديل المطلوب
+            supports_streaming=True
         )
         
         await event.delete()
