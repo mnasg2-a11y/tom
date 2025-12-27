@@ -1,21 +1,22 @@
-import os
-import sys
+# أنشئ ملف fix.py جديد
+cat > fix.py << 'EOF'
 import subprocess
+import sys
 
-print("🔧 جـاري إصـلاح الـمـشـاكـل الـنـهـائـي...")
+# قائمة بالإصلاحات
+fixes = [
+    "pip install setuptools<81 -q",
+    "pip install pytz -q", 
+    "pip install tzlocal -q",
+    "pip install APScheduler==3.10.4 -q"
+]
 
-# 1. إصلاح مشكلة timezone
-os.environ['TZ'] = 'UTC'
+for fix in fixes:
+    subprocess.run(fix, shell=True)
 
-# 2. تحديث setuptools لحل مشكلة pkg_resources
-subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "setuptools<81"])
+print("All fixes applied successfully")
+print("Now run: python installer.py")
+EOF
 
-# 3. إزالة وإعادة تثبيت apscheduler بإصدار متوافق
-subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "apscheduler"])
-subprocess.run([sys.executable, "-m", "pip", "install", "apscheduler==3.10.4"])
-
-# 4. تثبيت pytz للتأكد
-subprocess.run([sys.executable, "-m", "pip", "install", "pytz"])
-
-print("✅ تـم الإصـلاح بـنـجـاح!")
-print("✨ الـآن شـغّـل مـلـف installer.py بـدون مـشـاكـل")
+# شغله
+python fix.py
