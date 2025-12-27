@@ -1,105 +1,147 @@
-# plugins/ai_single.py
+# plugins/ai_pro.py
 from telethon import events
 import aiohttp
 import json
 import random
-from __main__ import client # استيراد العميل الأساسي لضمان العمل
+import os
+from __main__ import client # استيراد العميل الأساسي للفهرسة
 
-# --- بيانات فهرسة السورس (ضرورية ليظهر في القائمة) ---
+# --- بيانات الفهرسة لظهور الأوامر في قائمة السورس ---
 SECTION_NAME = "🧠 قسم الذكاء الاصطناعي المطور"
-COMMANDS = "• `.ذكاء` : لوحة التحكم الذكية الشاملة (20 ميزة)"
+COMMANDS = (
+    "• `.ذكاء` : قائمة جميع الأوامر الذكية\n"
+    "• `.سؤال` : محادثة ذكية فورية\n"
+    "• `.كود` : برمجة وتصحيح ذكي\n"
+    "• `.رسم` : إنشاء وصف للصور\n"
+    "• `.مقال` : كتابة محتوى طويل\n"
+    "• `.ترجم` : ترجمة احترافية\n"
+    "• `.لخص` : تلخيص النصوص\n"
+    "• `.حل` : حل المشكلات البرمجية\n"
+    "• `.افكار` : توليد أفكار إبداعية\n"
+    "• `.حكمة` : حكمة اليوم الذكية"
+)
 
 # =========================================================
-# 🎯 محرك معالجة البيانات (Gemini 2.0 Flash Lite)
+# 🎯 محرك Gemini 2.0 Flash Lite الأساسي
 # =========================================================
 
 async def ask_gemini(prompt):
-    """الاتصال المباشر بمحرك الذكاء من ملفاتك"""
     api_url = "https://firebasevertexai.googleapis.com/v1beta/projects/gemmy-ai-bdc03/locations/us-central1/publishers/google/models/gemini-2.0-flash-lite:generateContent"
     headers = {
         'User-Agent': "Ktor client", 
+        'Accept': "application/json", 
         'Content-Type': "application/json", 
         'x-goog-api-key': "AIzaSyD6QwvrvnjU7j-R6fkOghfIVKwtvc7SmLk", 
         'x-goog-api-client': "gl-kotlin/2.2.0-ai fire/16.5.0", 
-        'x-firebase-appid': "1:652803432695:android:c4341db6033e62814f33f2"
+        'x-firebase-appid': "1:652803432695:android:c4341db6033e62814f33f2", 
+        'x-firebase-appversion': "79", 
+        'x-firebase-appcheck': "eyJlcnJvciI6IlVOS05PV05fRVJST1IifQ=="
     }
     payload = {
+        "model": "projects/gemmy-ai-bdc03/locations/us-central1/publishers/google/models/gemini-2.0-flash-lite", 
         "contents": [{"role": "user", "parts": [{"text": prompt}]}]
     }
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(api_url, json=payload, headers=headers, timeout=30) as resp:
-                if resp.status == 200:
-                    res = await resp.json()
-                    return res['candidates'][0]['content']['parts'][0]['text'].strip()
+            async with session.post(api_url, json=payload, headers=headers, timeout=30) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if 'candidates' in result and result['candidates']:
+                        return result['candidates'][0]['content']['parts'][0]['text'].strip()
     except: return None
+    return None
 
 # =========================================================
-# 🛠 الأمر الرئيسي لـ حسين (20 ميزة مدمجة)
+# 🛠 الأوامر المباشرة (تعمل بدون كلمة ذكاء)
 # =========================================================
 
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.ذكاء'))
-async def ai_master_command(event):
-    # عرض اللوحة إذا كتب .ذكاء فقط
-    if " " not in event.text:
-        menu = (
-            "╔════════════════════╗\n"
-            "      **🧠 ذكاء كـومـن  P R O**\n"
-            "╚════════════════════╝\n\n"
-            "📝 **استخدم: `.ذكاء [الأمر] [نص]`**\n\n"
-            "1. `سؤال` 2. `صورة` 3. `كود` 4. `مقال` \n"
-            "5. `ترجم` 6. `لخص` 7. `حل` 8. `افكار` \n"
-            "9. `تعلم` 10. `قصة` 11. `شعر` 12. `تصميم` \n"
-            "13. `خطط` 14. `اختبر` 15. `حكمة` 16. `تحليل` \n"
-            "17. `ابتكار` 18. `شرح` 19. `تصحيح` 20. `تحسين` \n"
-            "───━━━━─ ● ─━━━━───\n"
-            "💎 **S O U R C E  C O M M O N**"
-        )
-        return await event.edit(menu)
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.ذكاء$'))
+async def ai_menu(event):
+    """عرض قائمة التعليمات"""
+    menu = """
+🧠 **🛠 سورس كـومـن - نـظـام الـذكـاء الـمـتـكـامـل 🛠**
 
-    # معالجة المدخلات
-    input_data = event.text.replace('.ذكاء ', '').split(maxsplit=1)
-    if len(input_data) < 2 and input_data[0] != 'حكمة':
-        return await event.edit("⚠️ **يرجى كتابة نص بعد الأمر (مثال: .ذكاء سؤال من أنت؟)**")
+**📋 الأوامر المباشرة المتاحة:**
+• `.سؤال [نص]` ← محادثة ذكية
+• `.رسم [وصف]` ← إنشاء وصف صورة
+• `.كود [لغة] [وصف]` ← كتابة كود
+• `.مقال [موضوع]` ← كتابة مقال
+• `.ترجم [لغة] [نص]` ← ترجمة
+• `.لخص [نص]` ← تلخيص
+• `.حل [مشكلة]` ← حل المشاكل
+• `.افكار [موضوع]` ← أفكار إبداعية
+• `.تعلم [موضوع]` ← شرح تعليمي
+• `.قصة [فكرة]` ← كتابة قصة
+• `.شعر [موضوع]` ← قصيدة شعرية
+• `.تصميم [وصف]` ← تصميمات
+• `.خطط [هدف]` ← تخطيط
+• `.اختبر [موضوع]` ← اختبار
+• `.حكمة` ← حكمة عشوائية
 
-    cmd = input_data[0]
-    user_text = input_data[1] if len(input_data) > 1 else ""
-    await event.edit(f"🔍 **جـارِ مـعـالجة `{cmd}` عبر Gemini...**")
+**👤 المطور:** @iomk0 | **📢 القناة:** @iomk3
+    """
+    await event.edit(menu)
 
-    # خريطة الأوامر الـ 20 المدمجة مع AI
-    prompts = {
-        'سؤال': f"أجب بذكاء: {user_text}",
-        'صورة': f"صف صورة احترافية لـ: {user_text}",
-        'كود': f"اكتب كود برمجي نظيف لـ: {user_text}",
-        'مقال': f"اكتب مقالاً طويلاً ومنسقاً عن: {user_text}",
-        'ترجم': f"ترجم النص التالي للعربية بدقة: {user_text}",
-        'لخص': f"لخص هذا النص بأسلوب نقاط: {user_text}",
-        'حل': f"قدم حلاً منطقياً لهذه المشكلة: {user_text}",
-        'افكار': f"أعطني 5 أفكار إبداعية لـ: {user_text}",
-        'تعلم': f"اشرح لي هذا الموضوع كأنني طفل: {user_text}",
-        'قصة': f"اكتب قصة قصيرة مشوقة عن: {user_text}",
-        'شعر': f"اكتب أبيات شعرية فصيحة عن: {user_text}",
-        'تصميم': f"خطط لتصميم جرافيكي لـ: {user_text}",
-        'خطط': f"ارسم لي خطة عمل ناجحة لـ: {user_text}",
-        'اختبر': f"اطرح علي سؤالاً صعباً في: {user_text}",
-        'حكمة': "أعطني حكمة عالمية نادرة.",
-        'تحليل': f"حلل البيانات التالية تحليلاً دقيقاً: {user_text}",
-        'ابتكار': f"اقترح ابتكاراً تقنياً جديداً لـ: {user_text}",
-        'شرح': f"اشرح لي كود أو منطق: {user_text}",
-        'تصحيح': f"صحح الأخطاء في هذا النص أو الكود: {user_text}",
-        'تحسين': f"كيف يمكنني تحسين جودة: {user_text}"
-    }
-
-    if cmd in prompts:
-        response = await ask_gemini(prompts[cmd])
-        res_msg = (
-            f"╔════════════════════╗\n"
-            f"      **✨ نـتـيـجـة الـذـكاء ({cmd})**\n"
-            f"╚════════════════════╝\n\n"
-            f"• {response if response else 'عذراً حسين، المحرك مشغول حالياً.'}\n"
-            f"───━━━━─ ● ─━━━━───\n"
-            f"💎 **S O U R C E  C O M M O N**"
-        )
-        await event.edit(res_msg)
+# دالة المعالجة الموحدة للأوامر المباشرة
+async def process_ai_cmd(event, mode, prompt_prefix):
+    if len(event.text.split()) < 2 and mode != 'حكمة':
+        return await event.edit(f"⚠️ **يرجى كتابة نص بعد الأمر.**\nمثال: `.{mode} كيف حالك؟`")
+    
+    user_input = event.text.split(maxsplit=1)[1] if mode != 'حكمة' else ""
+    await event.edit(f"🤔 **جـارِ مـعـالجة '{mode}' عبر Gemini...**")
+    
+    if mode == 'حكمة':
+        wisdoms = ["الصبر مفتاح الفرج.", "العلم في الصغر كالنقش في الحجر.", "الوقت كالسيف إن لم تقطعه قطعك."]
+        return await event.edit(f"💭 **حكمة اليوم:**\n\n{random.choice(wisdoms)}")
+    
+    response = await ask_gemini(f"{prompt_prefix}: {user_input}")
+    if response:
+        await event.edit(f"🧠 **نـتـيـجـة الـذكاء ({mode}):**\n\n{response}")
     else:
-        await event.edit("❌ **الأمر غير موجود في القائمة.**")
+        await event.edit("❌ **فشل الاتصال بمحرك Gemini، حاول لاحقاً.**")
+
+# تسجيل الأوامر الـ 15 المباشرة
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.سؤال (.*)'))
+async def ai_s(event): await process_ai_cmd(event, 'سؤال', 'أجب على هذا السؤال بالعربية')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.رسم (.*)'))
+async def ai_r(event): await process_ai_cmd(event, 'رسم', 'صف صورة تفصيلية احترافية لـ')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.كود (.*)'))
+async def ai_c(event): await process_ai_cmd(event, 'كود', 'اكتب كود برمجي نظيف مع شرح لـ')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.مقال (.*)'))
+async def ai_m(event): await process_ai_cmd(event, 'مقال', 'اكتب مقالاً طويلاً ومنسقاً عن')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.ترجم (.*)'))
+async def ai_t(event): await process_ai_cmd(event, 'ترجم', 'ترجم النص التالي للعربية بدقة')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.لخص (.*)'))
+async def ai_l(event): await process_ai_cmd(event, 'لخص', 'لخص النص التالي بأسلوب نقاط')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.حل (.*)'))
+async def ai_h(event): await process_ai_cmd(event, 'حل', 'حل المشكلة التالية برمجياً ومنطقياً')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.افكار (.*)'))
+async def ai_f(event): await process_ai_cmd(event, 'افكار', 'قدم 5 أفكار إبداعية ومبتكرة عن')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.تعلم (.*)'))
+async def ai_e(event): await process_ai_cmd(event, 'تعلم', 'اشرح لي هذا الموضوع بطريقة مبسطة')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.قصة (.*)'))
+async def ai_q(event): await process_ai_cmd(event, 'قصة', 'اكتب قصة قصيرة ومشوقة عن')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.شعر (.*)'))
+async def ai_sh(event): await process_ai_cmd(event, 'شعر', 'اكتب قصيدة شعرية فصيحة عن')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.تصميم (.*)'))
+async def ai_ds(event): await process_ai_cmd(event, 'تصميم', 'صف تصميماً جرافيكياً احترافياً لـ')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.خطط (.*)'))
+async def ai_pl(event): await process_ai_cmd(event, 'خطط', 'ارسم خطة عمل استراتيجية لـ')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.اختبر (.*)'))
+async def ai_test(event): await process_ai_cmd(event, 'اختبر', 'اطرح علي سؤالاً صعباً لاختبار معرفتي في')
+
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.حكمة'))
+async def ai_w(event): await process_ai_cmd(event, 'حكمة', '')
